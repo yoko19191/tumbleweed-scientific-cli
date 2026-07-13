@@ -1,0 +1,26 @@
+{
+  "name": "tumbleweed-scientific-cli",
+  "version": "0.1.0",
+  "description": "CLI client for tumbleweed-scientific-worker — submit, monitor, and retrieve AI model inference jobs",
+  "type": "module",
+  "bin": {
+    "tumbleweed": "src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "bun build --compile src/index.ts --outfile dist/tumbleweed",
+    "build:all": "scripts/build-all.sh",
+    "test": "bun test",
+    "lint": "bunx --bun tsc --noEmit"
+  },
+  "dependencies": {
+    "commander": "^13.1.0",
+    "picocolors": "^1.1.1",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.18"
+  },
+  "keywords": ["cli", "scientific-computing", "bioinformatics", "alphafold", "esm3"],
+  "license": "MIT"
+}
