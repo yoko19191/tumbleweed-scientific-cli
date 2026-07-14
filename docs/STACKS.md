@@ -8,7 +8,8 @@
 
 - **主要用户**：AI Agent（自动化调用）
 - **次要用户**：开发者（调试、运维）
-- **核心工作流**：查看模型 → 上传输入 → 提交任务 → 轮询状态 → 拉取结果
+- **核心工作流**：发现模型 → 校验并上传输入 → 提交任务 → 轮询状态 → 拉取结果
+- **命令边界**：Worker 相关能力全部收束在 `tumbleweed jobs`；未来能力使用新的顶层命名空间
 
 ## 选型总览
 
@@ -19,10 +20,11 @@
 | 输出着色 | **picocolors** | ^1 | 零依赖、体积极小（< 1 KB），仅在 `--human` 模式启用 |
 | Schema 校验 | **Zod** | ^3 | 校验 API 响应、CLI 参数，TypeScript 类型推断一流 |
 | HTTP | **Bun 内置 fetch** | — | 零额外依赖 |
-| 配置 | 环境变量 + JSON | — | `TW_API_URL` 优先，fallback `~/.config/tumbleweed/config.json` |
+| 配置 | 环境变量 + JSON | — | `TUMBLEWEED_WORKER_URL` 优先，其次是配置文件与默认 Worker 地址 |
 | 打包 | **bun build --compile** | — | 编译为单个可执行文件，目标机器零依赖 |
 | 多平台 CI | **GitHub Actions matrix** | — | macOS arm64/x64 + Linux x64/arm64 交叉编译 |
-| 测试 | **bun:test** | — | Bun 内置测试框架，零配置 |
+| 测试 | **bun:test** | — | 集成式命令测试，内置覆盖率门禁不低于 95% |
+| Lint / Format | **Biome** | ^2 | 一套工具完成 TypeScript lint、import 整理与格式化 |
 
 ## 未选方案及理由
 
@@ -39,9 +41,9 @@
 
 ## 输出策略
 
-- **默认输出 JSON**：所有命令 stdout 输出合法 JSON，方便 Agent 直接 `JSON.parse()`
+- **默认输出 JSON**：命令结果 stdout 输出合法 JSON，方便 Agent 直接 `JSON.parse()`
 - **`--human` 全局 flag**：启用彩色、表格等人类可读格式
-- **错误输出到 stderr**：确保 Agent 可以区分正常输出和错误信息
+- **错误和进度输出到 stderr**：进度使用 `progress` 事件，不伪装成错误
 - **退出码**：0 = 成功，1 = 业务错误，2 = 网络/配置错误
 
 ## 分发策略
@@ -57,3 +59,5 @@
 
 模型 ID、参数 schema、输入规格全部从 `GET /models` API 动态获取，CLI 代码中不写死任何模型信息。
 Worker 侧新增/修改模型只需要更新 YAML 配置并重启，CLI 无需任何改动。
+
+`tumbleweed jobs submit` 会根据动态 schema 解析参数类型、检查必填输入，随后完成 presigned PUT 和 `POST /jobs`。CLI 只负责命令协议与本地文件传输；调度、任务状态、模型执行和结果存储仍由 Worker 负责。

@@ -1,42 +1,39 @@
-#!/usr/bin/env bun
 import { Command } from "commander";
-import { setHumanMode, outputError } from "./output.js";
-import { ApiClientError } from "./client.js";
-import { registerModelsCommand } from "./commands/models.js";
-import { registerUploadCommand } from "./commands/upload.js";
+import packageJson from "../package.json";
+import { ApiClientError } from "./worker/client.js";
 import { registerJobsCommand } from "./commands/jobs.js";
-import { registerHealthCommand } from "./commands/health.js";
-import { registerConfigCommand } from "./commands/config.js";
+import { CliError } from "./errors.js";
+import { outputError, setHumanMode } from "./output.js";
 
-const program = new Command();
+export interface ProgramOptions {
+  configPath?: string;
+}
 
-program
-  .name("tumbleweed")
-  .description(
-    "CLI client for tumbleweed-scientific-worker — submit, monitor, and retrieve AI model inference jobs",
-  )
-  .version("0.1.0")
-  .option("--human", "Enable human-readable colored output (default: JSON)")
-  .hook("preAction", (thisCommand) => {
-    const opts = thisCommand.opts();
-    if (opts.human) {
-      setHumanMode(true);
-    }
-  });
+export function createProgram(options: ProgramOptions = {}): Command {
+  setHumanMode(false);
+  const program = new Command();
 
-// Register all subcommands
-registerModelsCommand(program);
-registerUploadCommand(program);
-registerJobsCommand(program);
-registerHealthCommand(program);
-registerConfigCommand(program);
+  program
+    .name("tumbleweed")
+    .description(packageJson.description)
+    .version(packageJson.version)
+    .option("--human", "Enable human-readable colored output (default: JSON)")
+    .hook("preAction", (thisCommand) => {
+      if (thisCommand.opts().human) setHumanMode(true);
+    });
+
+  registerJobsCommand(program, options);
+  return program;
+}
 
 // ---------------------------------------------------------------------------
 // Global error handling
 // ---------------------------------------------------------------------------
-async function main(): Promise<void> {
+export async function main(argv: string[] = process.argv): Promise<number> {
+  const program = createProgram();
   try {
-    await program.parseAsync(process.argv);
+    await program.parseAsync(argv);
+    return 0;
   } catch (err) {
     if (err instanceof ApiClientError) {
       outputError(err.message, {
@@ -44,18 +41,16 @@ async function main(): Promise<void> {
         status: err.statusCode,
         ...err.detail,
       });
-      process.exit(1);
+      return err.statusCode >= 500 || err.statusCode === 0 ? 2 : 1;
+    }
+    if (err instanceof CliError) {
+      outputError(err.message, { code: err.code, ...err.detail });
+      return err.exitCode;
     }
     if (err instanceof Error) {
-      // Commander exits with its own errors (e.g. missing arg), let those through
-      if (err.message.includes("commander")) {
-        throw err;
-      }
       outputError(err.message);
-      process.exit(2);
+      return 2;
     }
     throw err;
   }
 }
-
-main();

@@ -1,17 +1,22 @@
 {
   "name": "tumbleweed-scientific-cli",
   "version": "0.1.0",
-  "description": "CLI client for tumbleweed-scientific-worker — submit, monitor, and retrieve AI model inference jobs",
+  "description": "Agent-friendly CLI for discovering models and managing remote scientific jobs",
   "type": "module",
   "bin": {
-    "tumbleweed": "src/index.ts"
+    "tumbleweed": "src/bin.ts"
   },
   "scripts": {
-    "dev": "bun run src/index.ts",
-    "build": "bun build --compile src/index.ts --outfile dist/tumbleweed",
-    "build:all": "scripts/build-all.sh",
+    "dev": "bun run src/bin.ts",
+    "build": "bun build --compile src/bin.ts --outfile dist/tumbleweed",
+    "build:all": "bash scripts/build-all.sh",
     "test": "bun test",
-    "lint": "bunx --bun tsc --noEmit"
+    "test:coverage": "bun test --coverage",
+    "lint": "biome lint .",
+    "typecheck": "tsc --noEmit",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "check": "bun run test:coverage && bun run lint && bun run typecheck && bun run format:check && bun run build"
   },
   "dependencies": {
     "commander": "^13.1.0",
@@ -19,8 +24,20 @@
     "zod": "^3.25.67"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.3",
     "@types/bun": "^1.2.18"
   },
-  "keywords": ["cli", "scientific-computing", "bioinformatics", "alphafold", "esm3"],
+  "packageManager": "bun@1.3.14",
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "keywords": [
+    "cli",
+    "scientific-computing",
+    "bioinformatics",
+    "alphafold",
+    "esm3"
+  ],
   "license": "MIT"
 }

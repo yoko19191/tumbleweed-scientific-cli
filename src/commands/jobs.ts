@@ -1,28 +1,67 @@
-import { writeFileSync, mkdirSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { Command } from "commander";
+import type { Command } from "commander";
 import {
-  createJob,
-  listJobs,
-  getJob,
-  getJobResult,
-  getJobLogs,
   cancelJob,
+  createJob,
+  getJob,
+  getJobLogs,
+  getJobResult,
+  healthz,
+  listJobs,
+  listModels,
+  readyz,
+  uploadFile,
   waitForJob,
-} from "../client.js";
+} from "../worker/client.js";
 import { loadConfig } from "../config.js";
-import { outputJson, outputJob, outputJobList, outputSuccess, outputError } from "../output.js";
+import { CliError } from "../errors.js";
+import {
+  outputJob,
+  outputJobList,
+  outputJson,
+  outputLogs,
+  outputModelList,
+  outputProgress,
+  outputSuccess,
+} from "../output.js";
+import type { ModelPublic, ParamSpec } from "../worker/schemas.js";
+import { registerConfigCommand } from "./config.js";
 
-export function registerJobsCommand(program: Command): void {
+export function registerJobsCommand(
+  program: Command,
+  options: { configPath?: string } = {},
+): void {
   const jobs = program
     .command("jobs")
-    .description("Manage inference jobs");
+    .description("Manage jobs on a remote Tumbleweed Scientific Worker");
+
+  jobs
+    .command("models")
+    .description("Discover models from the Worker registry")
+    .argument("[model_id]", "Show one model in detail")
+    .action(async (modelId?: string) => {
+      const result = await listModels();
+      if (modelId) {
+        const model = result.items.find((item) => item.id === modelId);
+        if (!model)
+          throw new CliError(`Unknown model: ${modelId}`, "unknown_model");
+        outputJson(model);
+        return;
+      }
+      outputModelList(result.items);
+    });
 
   // ── submit ────────────────────────────────────────────────────────────
   jobs
     .command("submit")
     .description("Submit a new inference job")
     .requiredOption("--model <id>", "Model ID")
+    .option(
+      "--input <entries...>",
+      "Local input files as name=path pairs; files are uploaded before submission",
+    )
     .option(
       "--input-key <entries...>",
       "Input object keys as name=key pairs (e.g. input=jobs/xxx/input/input/seq.fa)",
@@ -34,10 +73,14 @@ export function registerJobsCommand(program: Command): void {
     .option("--job-id <id>", "Specify a job ID (optional)")
     .option("--job-alias <alias>", "Human-readable alias for the job")
     .option("--gpu-count <n>", "Override GPU count", parseInt)
-    .option("--idempotency-key <key>", "Idempotency key to prevent duplicate submissions")
+    .option(
+      "--idempotency-key <key>",
+      "Idempotency key to prevent duplicate submissions",
+    )
     .action(
       async (opts: {
         model: string;
+        input?: string[];
         inputKey?: string[];
         param?: string[];
         jobId?: string;
@@ -45,15 +88,33 @@ export function registerJobsCommand(program: Command): void {
         gpuCount?: number;
         idempotencyKey?: string;
       }) => {
-        const config = loadConfig();
+        const config = loadConfig(options);
+        const models = await listModels();
+        const model = models.items.find((item) => item.id === opts.model);
+        if (!model)
+          throw new CliError(`Unknown model: ${opts.model}`, "unknown_model");
+
+        const localInputs = parseKvPairs(opts.input ?? []);
         const inputKeys = parseKvPairs(opts.inputKey ?? []);
-        const params = parseKvPairsTyped(opts.param ?? []);
+        validateInputs(model, localInputs, inputKeys);
+        const params = parseModelParams(model.params, opts.param ?? []);
+        const jobId = opts.jobId ?? generateJobId();
+
+        for (const [inputName, filePath] of Object.entries(localInputs)) {
+          const uploaded = await uploadFile({
+            modelId: model.id,
+            inputName,
+            filePath,
+            jobId,
+          });
+          inputKeys[inputName] = uploaded.objectKey;
+        }
 
         const job = await createJob({
           model_id: opts.model,
           input_keys: inputKeys,
           params,
-          job_id: opts.jobId,
+          job_id: jobId,
           job_alias: opts.jobAlias,
           job_owner: config.job_owner,
           gpu_count: opts.gpuCount,
@@ -73,7 +134,7 @@ export function registerJobsCommand(program: Command): void {
     .option("--limit <n>", "Max items to return", parseInt, 50)
     .option("--offset <n>", "Pagination offset", parseInt, 0)
     .action(async (opts: { owner?: string; limit: number; offset: number }) => {
-      const config = loadConfig();
+      const config = loadConfig(options);
       const result = await listJobs({
         jobOwner: opts.owner ?? config.job_owner,
         limit: opts.limit,
@@ -84,8 +145,8 @@ export function registerJobsCommand(program: Command): void {
 
   // ── status ────────────────────────────────────────────────────────────
   jobs
-    .command("status")
-    .description("Get job status and details")
+    .command("show")
+    .description("Show job status and details")
     .argument("<job_id>", "Job ID")
     .action(async (jobId: string) => {
       const job = await getJob(jobId);
@@ -105,13 +166,14 @@ export function registerJobsCommand(program: Command): void {
         mkdirSync(opts.outputDir, { recursive: true });
         const response = await fetch(result.url);
         if (!response.ok) {
-          outputError(`Download failed: HTTP ${response.status}`);
-          process.exit(1);
+          throw new CliError(
+            `Download failed: HTTP ${response.status}`,
+            "download_failed",
+          );
         }
-        const buffer = Buffer.from(await response.arrayBuffer());
         const filename = result.object_key.split("/").pop() ?? "result";
         const outPath = join(opts.outputDir, filename);
-        writeFileSync(outPath, buffer);
+        await Bun.write(outPath, response);
         outputSuccess(`Downloaded → ${outPath}`);
         outputJson({ path: outPath, object_key: result.object_key });
       } else {
@@ -126,15 +188,7 @@ export function registerJobsCommand(program: Command): void {
     .argument("<job_id>", "Job ID")
     .action(async (jobId: string) => {
       const logs = await getJobLogs(jobId);
-
-      if (logs.content) {
-        process.stdout.write(logs.content);
-        if (!logs.content.endsWith("\n")) process.stdout.write("\n");
-      } else if (logs.url) {
-        outputJson({ url: logs.url });
-      } else {
-        outputJson({ content: null, url: null });
-      }
+      outputLogs(logs);
     });
 
   // ── cancel ────────────────────────────────────────────────────────────
@@ -154,19 +208,56 @@ export function registerJobsCommand(program: Command): void {
     .description("Poll until job reaches a terminal state (Agent-friendly)")
     .argument("<job_id>", "Job ID")
     .option("--interval <seconds>", "Polling interval in seconds", parseInt, 5)
-    .option("--timeout <seconds>", "Maximum wait time in seconds", parseInt, 600)
+    .option(
+      "--timeout <seconds>",
+      "Maximum wait time in seconds",
+      parseInt,
+      600,
+    )
     .action(
       async (jobId: string, opts: { interval: number; timeout: number }) => {
         const job = await waitForJob(jobId, {
           intervalMs: opts.interval * 1000,
           timeoutMs: opts.timeout * 1000,
           onPoll: (j) => {
-            outputError(`Polling ${j.id}: ${j.status}`, undefined);
+            outputProgress(`Polling ${j.id}: ${j.status}`);
           },
         });
         outputJob(job);
+        if (job.status !== "SUCCEEDED") {
+          throw new CliError(
+            `Job ${job.id} ended with status ${job.status}`,
+            job.status === "FAILED" ? "job_failed" : "job_canceled",
+            1,
+            { job_id: job.id, status: job.status, error: job.error },
+          );
+        }
       },
     );
+
+  jobs
+    .command("health")
+    .description("Check Worker health and readiness")
+    .action(async () => {
+      const health = await healthz();
+      const ready = await readyz();
+      const workerUrl = loadConfig(options).worker_url;
+      if (ready.status !== "ok") {
+        throw new CliError(
+          "Worker is healthy but not ready",
+          "worker_not_ready",
+          1,
+          {
+            worker_url: workerUrl,
+            health,
+            ready,
+          },
+        );
+      }
+      outputJson({ worker_url: workerUrl, health, ready });
+    });
+
+  registerConfigCommand(jobs, options);
 }
 
 // ---------------------------------------------------------------------------
@@ -177,32 +268,139 @@ function parseKvPairs(entries: string[]): Record<string, string> {
   const result: Record<string, string> = {};
   for (const entry of entries) {
     const eqIndex = entry.indexOf("=");
-    if (eqIndex === -1) {
-      throw new Error(`Invalid key=value pair: ${entry}`);
-    }
-    result[entry.slice(0, eqIndex)] = entry.slice(eqIndex + 1);
-  }
-  return result;
-}
-
-function parseKvPairsTyped(entries: string[]): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const entry of entries) {
-    const eqIndex = entry.indexOf("=");
-    if (eqIndex === -1) {
-      throw new Error(`Invalid key=value pair: ${entry}`);
+    if (eqIndex <= 0) {
+      throw new CliError(
+        `Invalid key=value pair: ${entry}`,
+        "invalid_key_value",
+      );
     }
     const key = entry.slice(0, eqIndex);
-    const raw = entry.slice(eqIndex + 1);
-    result[key] = inferType(raw);
+    if (key in result)
+      throw new CliError(`Duplicate key: ${key}`, "duplicate_key");
+    result[key] = entry.slice(eqIndex + 1);
   }
   return result;
 }
 
-function inferType(value: string): unknown {
-  if (value === "true") return true;
-  if (value === "false") return false;
-  const num = Number(value);
-  if (!Number.isNaN(num) && value.trim() !== "") return num;
-  return value;
+function parseModelParams(
+  specs: ParamSpec[],
+  entries: string[],
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  const byName = new Map(specs.map((spec) => [spec.name, spec]));
+
+  for (const [name, raw] of Object.entries(parseKvPairs(entries))) {
+    const spec = byName.get(name);
+    if (!spec) {
+      throw new CliError(
+        `Unknown parameter for this model: ${name}`,
+        "unknown_parameter",
+      );
+    }
+    const value = parseParamValue(spec, raw);
+    if (typeof value === "number") {
+      if (spec.min != null && value < spec.min) {
+        throw new CliError(
+          `${name} must be greater than or equal to ${spec.min}`,
+          "parameter_out_of_range",
+        );
+      }
+      if (spec.max != null && value > spec.max) {
+        throw new CliError(
+          `${name} must be less than or equal to ${spec.max}`,
+          "parameter_out_of_range",
+        );
+      }
+    }
+    result[name] = value;
+  }
+  return result;
+}
+
+function parseParamValue(spec: ParamSpec, value: string): unknown {
+  if (spec.type === "str") return value;
+  if (spec.type === "enum") {
+    if (!spec.choices?.includes(value)) {
+      throw new CliError(
+        `${spec.name} must be one of: ${spec.choices?.join(", ") ?? ""}`,
+        "invalid_parameter",
+      );
+    }
+    return value;
+  }
+  if (spec.type === "bool") {
+    if (value === "true") return true;
+    if (value === "false") return false;
+    throw new CliError(
+      `${spec.name} must be true or false`,
+      "invalid_parameter",
+    );
+  }
+  if (spec.type === "int") {
+    if (!/^-?\d+$/.test(value)) {
+      throw new CliError(
+        `${spec.name} must be an integer`,
+        "invalid_parameter",
+      );
+    }
+    return Number.parseInt(value, 10);
+  }
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    throw new CliError(`${spec.name} must be a number`, "invalid_parameter");
+  }
+  return number;
+}
+
+function validateInputs(
+  model: ModelPublic,
+  localInputs: Record<string, string>,
+  inputKeys: Record<string, string>,
+): void {
+  const knownInputs = new Set(model.inputs.files.map((input) => input.name));
+  for (const name of [...Object.keys(localInputs), ...Object.keys(inputKeys)]) {
+    if (!knownInputs.has(name)) {
+      throw new CliError(
+        `Unknown input for ${model.id}: ${name}`,
+        "unknown_input",
+      );
+    }
+  }
+  for (const name of Object.keys(localInputs)) {
+    if (name in inputKeys) {
+      throw new CliError(
+        `Input ${name} has both a local file and an object key`,
+        "duplicate_input",
+      );
+    }
+  }
+  for (const input of model.inputs.files) {
+    if (
+      input.required &&
+      !(input.name in localInputs) &&
+      !(input.name in inputKeys)
+    ) {
+      throw new CliError(
+        `Missing required input: ${input.name}`,
+        "missing_input",
+      );
+    }
+  }
+}
+
+export function generateJobId(
+  now = new Date(),
+  suffix = randomBytes(4).toString("hex"),
+): string {
+  const date = [
+    now.getUTCFullYear(),
+    String(now.getUTCMonth() + 1).padStart(2, "0"),
+    String(now.getUTCDate()).padStart(2, "0"),
+  ].join("");
+  const time = [
+    String(now.getUTCHours()).padStart(2, "0"),
+    String(now.getUTCMinutes()).padStart(2, "0"),
+    String(now.getUTCSeconds()).padStart(2, "0"),
+  ].join("");
+  return `job_${date}_${time}_${suffix.toLowerCase()}`;
 }

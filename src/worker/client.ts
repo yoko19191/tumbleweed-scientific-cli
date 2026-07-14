@@ -1,22 +1,24 @@
-import { readFileSync, statSync } from "node:fs";
 import { basename } from "node:path";
-import { loadConfig } from "./config.js";
+import { loadConfig } from "../config.js";
+import { CliError } from "../errors.js";
 import {
   ApiErrorSchema,
-  JobListOutSchema,
-  JobOutSchema,
-  LogsOutSchema,
-  ModelListOutSchema,
-  PresignedGetOutSchema,
-  PresignUploadOutSchema,
   type CreateJobRequest,
+  HealthOutSchema,
   type JobListOut,
+  JobListOutSchema,
   type JobOut,
+  JobOutSchema,
   type LogsOut,
+  LogsOutSchema,
   type ModelListOut,
-  type PresignUploadOut,
+  ModelListOutSchema,
   type PresignedGetOut,
-} from "./types.js";
+  PresignedGetOutSchema,
+  type PresignUploadOut,
+  PresignUploadOutSchema,
+  ReadyOutSchema,
+} from "./schemas.js";
 
 // ---------------------------------------------------------------------------
 // API client error
@@ -39,17 +41,18 @@ export class ApiClientError extends Error {
 
 function apiUrl(path: string): string {
   const config = loadConfig();
-  const base = config.api_url.replace(/\/+$/, "");
+  const base = config.worker_url;
   return `${base}${path}`;
 }
 
 async function handleResponse<T>(
   response: Response,
   parse: (data: unknown) => T,
+  acceptedStatuses: readonly number[] = [],
 ): Promise<T> {
   const body = await response.json();
 
-  if (!response.ok) {
+  if (!response.ok && !acceptedStatuses.includes(response.status)) {
     const parsed = ApiErrorSchema.safeParse(body);
     if (parsed.success) {
       throw new ApiClientError(
@@ -69,9 +72,13 @@ async function handleResponse<T>(
   return parse(body);
 }
 
-async function get<T>(path: string, parse: (d: unknown) => T): Promise<T> {
+async function get<T>(
+  path: string,
+  parse: (d: unknown) => T,
+  acceptedStatuses?: readonly number[],
+): Promise<T> {
   const response = await fetch(apiUrl(path));
-  return handleResponse(response, parse);
+  return handleResponse(response, parse, acceptedStatuses);
 }
 
 async function post<T>(
@@ -136,7 +143,13 @@ export async function uploadFile(opts: {
   filePath: string;
   jobId?: string;
 }): Promise<{ objectKey: string }> {
-  const stat = statSync(opts.filePath);
+  const file = Bun.file(opts.filePath);
+  if (!(await file.exists())) {
+    throw new CliError(
+      `Input file not found: ${opts.filePath}`,
+      "input_file_not_found",
+    );
+  }
   const filename = basename(opts.filePath);
 
   // 1. Get presigned URL
@@ -144,15 +157,15 @@ export async function uploadFile(opts: {
     modelId: opts.modelId,
     inputName: opts.inputName,
     filename,
+    contentType: file.type || "application/octet-stream",
     jobId: opts.jobId,
-    sizeBytes: stat.size,
+    sizeBytes: file.size,
   });
 
-  // 2. PUT file content
-  const fileContent = readFileSync(opts.filePath);
   const putResponse = await fetch(presign.url, {
     method: "PUT",
-    body: fileContent,
+    headers: { "Content-Type": file.type || "application/octet-stream" },
+    body: file,
   });
 
   if (!putResponse.ok) {
@@ -216,14 +229,14 @@ export async function cancelJob(jobId: string): Promise<JobOut> {
 // ---------------------------------------------------------------------------
 
 export async function healthz(): Promise<{ status: string }> {
-  return get("/healthz", (d) => d as { status: string });
+  return get("/healthz", (d) => HealthOutSchema.parse(d));
 }
 
 export async function readyz(): Promise<{
   status: string;
   checks: Record<string, string>;
 }> {
-  return get("/readyz", (d) => d as { status: string; checks: Record<string, string> });
+  return get("/readyz", (d) => ReadyOutSchema.parse(d), [503]);
 }
 
 // ---------------------------------------------------------------------------
@@ -234,7 +247,11 @@ const TERMINAL_STATUSES = new Set(["SUCCEEDED", "FAILED", "CANCELED"]);
 
 export async function waitForJob(
   jobId: string,
-  opts?: { intervalMs?: number; timeoutMs?: number; onPoll?: (job: JobOut) => void },
+  opts?: {
+    intervalMs?: number;
+    timeoutMs?: number;
+    onPoll?: (job: JobOut) => void;
+  },
 ): Promise<JobOut> {
   const interval = opts?.intervalMs ?? 5000;
   const timeout = opts?.timeoutMs ?? 600_000;

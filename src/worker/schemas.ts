@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
-// Job status enum
+// Worker job status enum
 // ---------------------------------------------------------------------------
 export const JobStatus = z.enum([
   "QUEUED",
@@ -120,6 +120,7 @@ export const ParamSpecSchema = z.object({
   description: z.string().default(""),
   help_zh: z.string().default(""),
 });
+export type ParamSpec = z.infer<typeof ParamSpecSchema>;
 
 export const ModelPublicSchema = z.object({
   id: z.string(),

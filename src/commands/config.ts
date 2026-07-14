@@ -1,12 +1,17 @@
-import { Command } from "commander";
-import { loadConfig, saveConfig, configWithSources, CONFIG_PATH } from "../config.js";
-import { outputJson, outputSuccess, outputError } from "../output.js";
+import type { Command } from "commander";
+import { CONFIG_PATH, configWithSources, saveConfig } from "../config.js";
+import { CliError } from "../errors.js";
+import { outputJson, outputSuccess } from "../output.js";
 
-const ALLOWED_KEYS = ["api_url", "job_owner"] as const;
+const ALLOWED_KEYS = ["worker_url", "job_owner"] as const;
 type ConfigKey = (typeof ALLOWED_KEYS)[number];
 
-export function registerConfigCommand(program: Command): void {
-  const config = program
+export function registerConfigCommand(
+  parent: Command,
+  options: { configPath?: string } = {},
+): void {
+  const configPath = options.configPath ?? CONFIG_PATH;
+  const config = parent
     .command("config")
     .description("Manage CLI configuration");
 
@@ -14,8 +19,8 @@ export function registerConfigCommand(program: Command): void {
     .command("show")
     .description("Show current configuration with sources")
     .action(() => {
-      const sources = configWithSources();
-      outputJson({ config_path: CONFIG_PATH, values: sources });
+      const sources = configWithSources(options);
+      outputJson({ config_path: configPath, values: sources });
     });
 
   config
@@ -25,10 +30,12 @@ export function registerConfigCommand(program: Command): void {
     .argument("<value>", "Config value")
     .action((key: string, value: string) => {
       if (!ALLOWED_KEYS.includes(key as ConfigKey)) {
-        outputError(`Unknown config key: ${key}. Allowed: ${ALLOWED_KEYS.join(", ")}`);
-        process.exit(1);
+        throw new CliError(
+          `Unknown config key: ${key}. Allowed: ${ALLOWED_KEYS.join(", ")}`,
+          "unknown_config_key",
+        );
       }
-      const updated = saveConfig({ [key]: value });
+      const updated = saveConfig({ [key]: value }, options);
       outputSuccess(`Set ${key} = ${value}`);
       outputJson(updated);
     });
@@ -37,6 +44,6 @@ export function registerConfigCommand(program: Command): void {
     .command("path")
     .description("Print config file path")
     .action(() => {
-      outputJson({ path: CONFIG_PATH });
+      outputJson({ path: configPath });
     });
 }

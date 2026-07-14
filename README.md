@@ -1,146 +1,134 @@
 # tumbleweed-scientific-cli
 
-CLI client for [tumbleweed-scientific-worker](../tumbleweed-scientific-worker) — submit, monitor, and retrieve AI model inference jobs.
+`tumbleweed` 是面向 AI Agent 与开发者的科学计算命令行入口。第一版能力集中在 `tumbleweed jobs`：从远端 Tumbleweed Scientific Worker 动态发现模型、上传输入、提交任务、观察状态并获取结果。
 
-Designed primarily for **AI Agent** consumption (JSON output by default), with optional human-readable mode.
+CLI 默认向 stdout 输出 JSON，进度与错误写入 stderr。模型 ID、输入和参数规格来自 Worker 的 `/models`，不会写死在 CLI 中。
 
-## Install
+## 安装
 
-### Pre-built binary (recommended for Agent environments)
+### 预编译二进制
 
-Download the latest release for your platform from [GitHub Releases](../../releases):
+从 GitHub Releases 下载当前平台的 `tumbleweed-*` 文件，然后放入 `PATH`：
 
 ```bash
-# macOS Apple Silicon
-curl -Lo tumbleweed https://github.com/<org>/tumbleweed-scientific-cli/releases/latest/download/tumbleweed-darwin-arm64
-chmod +x tumbleweed
-sudo mv tumbleweed /usr/local/bin/
+chmod +x tumbleweed-darwin-arm64
+mv tumbleweed-darwin-arm64 ~/.local/bin/tumbleweed
 ```
 
-### From source
+### 源码运行
 
 ```bash
 bun install
-bun run src/index.ts --help
+bun run dev -- --help
 ```
 
-## Configuration
+## Worker 地址
+
+默认 Worker 地址是 `http://10.39.13.209:9050/`。需要切换实例时，只使用 `TUMBLEWEED_WORKER_URL`：
 
 ```bash
-# Option 1: Environment variable (highest priority)
-export TW_API_URL=http://your-worker:8080
-
-# Option 2: Config file
-tumbleweed config set api_url http://your-worker:8080
-tumbleweed config set job_owner my_lab
-
-# Show current config with sources
-tumbleweed config show
+export TUMBLEWEED_WORKER_URL="http://10.39.13.209:9050/"
 ```
 
-Config file location: `~/.config/tumbleweed/config.json`
-
-## Usage
-
-All commands output JSON by default. Add `--human` for colored, human-readable output.
-
-### List available models
+也可以持久化到 `~/.config/tumbleweed/config.json`：
 
 ```bash
-tumbleweed models list
-tumbleweed models list --detail    # full model specs
+tumbleweed jobs config set worker_url http://10.39.13.209:9050/
+tumbleweed jobs config set job_owner liangzhu-lab
+tumbleweed jobs config show
 ```
 
-### Upload input files
+解析顺序为环境变量、配置文件、默认值。旧的 `TW_API_URL` 和 `api_url` 已移除。
+
+## 命令
+
+### 发现模型
 
 ```bash
-tumbleweed upload input.fa --model esm3 --input-name sequence
-tumbleweed upload input.fa --model esm3 --input-name sequence --job-id job_20260708_143012_a1b2c3d4
+tumbleweed jobs models
+tumbleweed jobs models esm3
 ```
 
-### Submit a job
+不带参数时返回所有可用模型；指定模型 ID 时返回它的输入、参数、资源和输出规格。
+
+### 提交任务
+
+`submit` 会先获取模型 schema，在本地验证输入和参数，然后依次完成 presign、文件上传和任务创建：
 
 ```bash
-tumbleweed jobs submit --model esm3 \
-  --input-key sequence=jobs/xxx/input/sequence/input.fa
-
-tumbleweed jobs submit --model rfdiffusion \
-  --param num_designs=4 \
-  --param contigs=100
+tumbleweed jobs submit \
+  --model esm3 \
+  --input sequence=./input.fa \
+  --param task=fold
 ```
 
-### Monitor jobs
+多个输入或参数可以连续传入。已经拥有 MinIO object key 时，可以跳过本地上传：
+
+```bash
+tumbleweed jobs submit \
+  --model esm3 \
+  --input-key sequence=jobs/example/input/sequence/input.fa \
+  --param task=fold
+```
+
+参数按照 Worker schema 解析，而不是根据字符串外观猜测类型。`str` 参数中的 `0.1` 会保留为字符串，`int`、`float`、`bool` 和 `enum` 则分别校验。
+
+### 查看任务
 
 ```bash
 tumbleweed jobs list
-tumbleweed jobs status <job_id>
+tumbleweed jobs list --owner liangzhu-lab --limit 20
+tumbleweed jobs show <job_id>
+tumbleweed jobs wait <job_id> --timeout 600 --interval 5
 tumbleweed jobs logs <job_id>
 ```
 
-### Wait for completion (Agent workflow)
+`wait` 会轮询到 `SUCCEEDED`、`FAILED` 或 `CANCELED`。JSON 模式下，轮询进度以 `{"progress":"..."}` 写入 stderr，不会污染最终 stdout；任务失败或取消时仍输出最终 Job JSON，但命令以退出码 `1` 结束。
+
+### 获取结果与取消任务
 
 ```bash
-tumbleweed jobs wait <job_id> --timeout 600 --interval 5
-```
-
-### Download results
-
-```bash
-tumbleweed jobs result <job_id>                      # get download URL
-tumbleweed jobs result <job_id> --output-dir ./out   # download to local
-```
-
-### Cancel a job
-
-```bash
+tumbleweed jobs result <job_id>
+tumbleweed jobs result <job_id> --output-dir ./results
 tumbleweed jobs cancel <job_id>
 ```
 
-### Health check
+不指定目录时，`result` 返回 presigned 下载信息；指定目录后直接把产物流式写入本地文件。
+
+### 检查 Worker
 
 ```bash
-tumbleweed health
-tumbleweed health --ready   # also check registry/database/storage
+tumbleweed jobs health
 ```
 
-## Agent Integration
+该命令同时检查 `/healthz` 与 `/readyz`，并返回实际 Worker 地址以及 registry、database、storage 的就绪状态。
 
-All commands default to machine-readable JSON on stdout, errors on stderr, and conventional exit codes:
+## 输出与退出码
 
-| Exit code | Meaning |
-|-----------|---------|
-| 0 | Success |
-| 1 | Business error (job not found, validation failed, etc.) |
-| 2 | Infrastructure error (network, configuration) |
-
-Typical Agent workflow:
+默认模式保证命令结果是 JSON。使用 `--human` 可以为任务和模型列表启用更适合终端阅读的输出：
 
 ```bash
-# 1. Upload input
-UPLOAD=$(tumbleweed upload input.fa --model esm3 --input-name sequence)
-KEY=$(echo "$UPLOAD" | jq -r '.objectKey')
-
-# 2. Submit job
-JOB=$(tumbleweed jobs submit --model esm3 --input-key sequence="$KEY")
-JOB_ID=$(echo "$JOB" | jq -r '.id')
-
-# 3. Wait for completion
-tumbleweed jobs wait "$JOB_ID" --timeout 600
-
-# 4. Download result
-tumbleweed jobs result "$JOB_ID" --output-dir ./results
+tumbleweed --human jobs list
 ```
 
-## Build
+| 退出码 | 含义 |
+|---|---|
+| `0` | 命令成功 |
+| `1` | 参数、模型、任务或其他业务错误 |
+| `2` | Worker 连接、服务端、配置或响应契约错误 |
+
+## 开发与验证
 
 ```bash
-# Build for current platform
+bun run dev -- jobs --help
+bun run test:coverage
+bun run lint
+bun run typecheck
+bun run format:check
 bun run build
-
-# Build for all platforms (requires respective OS runners in CI)
-bun run build:all
+bun run check
 ```
 
-## Tech Stack
+`bun run check` 是完整质量门禁：测试覆盖率不低于 95%、Biome lint、TypeScript 类型检查、格式检查以及当前平台单二进制构建。多平台二进制使用 `bun run build:all` 构建。
 
-See [docs/STACKS.md](docs/STACKS.md) for technology stack decisions.
+技术选型与边界说明见 [docs/STACKS.md](docs/STACKS.md)。

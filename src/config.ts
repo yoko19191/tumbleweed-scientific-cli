@@ -1,75 +1,105 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { CliError } from "./errors.js";
 
-// ---------------------------------------------------------------------------
-// Config shape
-// ---------------------------------------------------------------------------
-export interface TwConfig {
-  api_url: string;
+export interface JobsConfig {
+  worker_url: string;
   job_owner?: string;
 }
 
-const DEFAULT_API_URL = "http://localhost:8080";
-const CONFIG_DIR = join(homedir(), ".config", "tumbleweed");
-const CONFIG_PATH = join(CONFIG_DIR, "config.json");
+export interface ConfigOptions {
+  env?: Record<string, string | undefined>;
+  configPath?: string;
+}
 
-// ---------------------------------------------------------------------------
-// Load config: env vars → config file → defaults
-// ---------------------------------------------------------------------------
-export function loadConfig(): TwConfig {
-  const fileConfig = loadConfigFile();
+export const DEFAULT_WORKER_URL = "http://10.39.13.209:9050";
+export const CONFIG_PATH = join(
+  homedir(),
+  ".config",
+  "tumbleweed",
+  "config.json",
+);
+
+export function normalizeWorkerUrl(value: string): string {
+  try {
+    const url = new URL(value.trim());
+    if (
+      !["http:", "https:"].includes(url.protocol) ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash
+    ) {
+      throw new Error("unsupported Worker URL");
+    }
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    throw new CliError(
+      `Invalid Worker URL: ${value}. Expected an HTTP(S) base URL without credentials, query, or hash.`,
+      "invalid_worker_url",
+      2,
+    );
+  }
+}
+
+export function loadConfig(options: ConfigOptions = {}): JobsConfig {
+  const env = options.env ?? process.env;
+  const fileConfig = loadConfigFile(options.configPath ?? CONFIG_PATH);
 
   return {
-    api_url:
-      process.env.TW_API_URL ?? fileConfig.api_url ?? DEFAULT_API_URL,
-    job_owner: process.env.TW_JOB_OWNER ?? fileConfig.job_owner,
+    worker_url: normalizeWorkerUrl(
+      env.TUMBLEWEED_WORKER_URL ?? fileConfig.worker_url ?? DEFAULT_WORKER_URL,
+    ),
+    job_owner: fileConfig.job_owner,
   };
 }
 
-function loadConfigFile(): Partial<TwConfig> {
-  if (!existsSync(CONFIG_PATH)) {
-    return {};
-  }
+function loadConfigFile(configPath: string): Partial<JobsConfig> {
+  if (!existsSync(configPath)) return {};
+
   try {
-    const raw = readFileSync(CONFIG_PATH, "utf-8");
-    return JSON.parse(raw) as Partial<TwConfig>;
+    return JSON.parse(readFileSync(configPath, "utf-8")) as Partial<JobsConfig>;
   } catch {
     return {};
   }
 }
 
-// ---------------------------------------------------------------------------
-// Save config
-// ---------------------------------------------------------------------------
-export function saveConfig(patch: Partial<TwConfig>): TwConfig {
-  const current = loadConfig();
-  const merged: TwConfig = { ...current, ...patch };
+export function saveConfig(
+  patch: Partial<JobsConfig>,
+  options: Pick<ConfigOptions, "configPath"> = {},
+): JobsConfig {
+  const configPath = options.configPath ?? CONFIG_PATH;
+  const merged: JobsConfig = {
+    worker_url: DEFAULT_WORKER_URL,
+    ...loadConfigFile(configPath),
+    ...patch,
+  };
+  merged.worker_url = normalizeWorkerUrl(merged.worker_url);
 
-  mkdirSync(CONFIG_DIR, { recursive: true });
-  writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2) + "\n", "utf-8");
+  mkdirSync(dirname(configPath), { recursive: true });
+  writeFileSync(configPath, `${JSON.stringify(merged, null, 2)}\n`, "utf-8");
   return merged;
 }
 
-// ---------------------------------------------------------------------------
-// Show config (with source annotation)
-// ---------------------------------------------------------------------------
-export function configWithSources(): Record<string, { value: string; source: string }> {
-  const fileConfig = loadConfigFile();
+export function configWithSources(
+  options: ConfigOptions = {},
+): Record<string, { value: string; source: string }> {
+  const env = options.env ?? process.env;
+  const configPath = options.configPath ?? CONFIG_PATH;
+  const fileConfig = loadConfigFile(configPath);
 
-  const apiUrl = process.env.TW_API_URL
-    ? { value: process.env.TW_API_URL, source: "env TW_API_URL" }
-    : fileConfig.api_url
-      ? { value: fileConfig.api_url, source: CONFIG_PATH }
-      : { value: DEFAULT_API_URL, source: "default" };
+  const workerUrl = env.TUMBLEWEED_WORKER_URL
+    ? {
+        value: normalizeWorkerUrl(env.TUMBLEWEED_WORKER_URL),
+        source: "env TUMBLEWEED_WORKER_URL",
+      }
+    : fileConfig.worker_url
+      ? { value: normalizeWorkerUrl(fileConfig.worker_url), source: configPath }
+      : { value: DEFAULT_WORKER_URL, source: "default" };
+  const jobOwner = fileConfig.job_owner
+    ? { value: fileConfig.job_owner, source: configPath }
+    : { value: "(not set)", source: "default" };
 
-  const jobOwner = process.env.TW_JOB_OWNER
-    ? { value: process.env.TW_JOB_OWNER, source: "env TW_JOB_OWNER" }
-    : fileConfig.job_owner
-      ? { value: fileConfig.job_owner, source: CONFIG_PATH }
-      : { value: "(not set)", source: "default" };
-
-  return { api_url: apiUrl, job_owner: jobOwner };
+  return { worker_url: workerUrl, job_owner: jobOwner };
 }
-
-export { CONFIG_PATH };
