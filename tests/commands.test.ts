@@ -17,6 +17,17 @@ function modelFixture() {
     display_name: "ESM-3",
     help_zh: "蛋白质模型",
     enabled: true,
+    card: {
+      summary_zh: "生成并理解蛋白质序列与结构。",
+      category: "蛋白质设计",
+      tags: ["序列", "结构"],
+      input_modalities: ["FASTA"],
+      output_modalities: ["PDB"],
+      features: ["结构预测"],
+      use_cases: ["蛋白质设计"],
+      limitations: ["大模型需要较多显存"],
+      links: { repo: "https://github.com/evolutionaryscale/esm" },
+    },
     resources: { gpus: 1, gpus_min: 1, gpus_max: 1, timeout_seconds: 3600 },
     inputs: {
       files: [
@@ -26,6 +37,7 @@ function modelFixture() {
           help_zh: "输入序列",
           required: true,
           max_size_mb: 10,
+          example: "sequence_example.fasta",
         },
       ],
     },
@@ -79,13 +91,14 @@ function jobFixture(
 }
 
 describe("command surface", () => {
-  test("exposes every Worker capability below tumbleweed jobs", () => {
+  test("exposes the supported Worker job command surface", () => {
     const program = createProgram();
     expect(program.commands.map((command) => command.name())).toEqual(["jobs"]);
 
     const jobs = program.commands[0];
     expect(jobs?.commands.map((command) => command.name())).toEqual([
       "models",
+      "example",
       "submit",
       "list",
       "show",
@@ -96,6 +109,55 @@ describe("command surface", () => {
       "health",
       "config",
     ]);
+  });
+
+  test("downloads a declared model input example to an explicit path", async () => {
+    const requests: string[] = [];
+    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(
+      async (input) => {
+        const url = new URL(String(input));
+        requests.push(url.pathname);
+        return new Response(">demo\nMSTN\n", {
+          headers: { "Content-Type": "text/plain" },
+        });
+      },
+    );
+    process.env.TUMBLEWEED_WORKER_URL = "http://worker.test:9050/";
+    const directory = mkdtempSync(join(tmpdir(), "tumbleweed-example-"));
+    const outputPath = join(directory, "examples", "sequence.fasta");
+    const stdout: string[] = [];
+    const write = spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      stdout.push(String(chunk));
+      return true;
+    });
+
+    try {
+      await createProgram()
+        .exitOverride()
+        .parseAsync([
+          "bun",
+          "tumbleweed",
+          "jobs",
+          "example",
+          "esm3",
+          "sequence",
+          "--output",
+          outputPath,
+        ]);
+
+      expect(requests).toEqual(["/models/esm3/examples/sequence"]);
+      expect(readFileSync(outputPath, "utf-8")).toBe(">demo\nMSTN\n");
+      expect(JSON.parse(stdout.join(""))).toEqual({
+        model_id: "esm3",
+        input_name: "sequence",
+        path: outputPath,
+        bytes: 11,
+      });
+    } finally {
+      write.mockRestore();
+      fetchMock.mockRestore();
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   test("submit discovers the model, uploads local inputs, and preserves schema types", async () => {
@@ -301,7 +363,13 @@ describe("command surface", () => {
         if (url.pathname === "/readyz") {
           return Response.json({
             status: "ok",
-            checks: { registry: "ok", database: "ok", storage: "ok" },
+            checks: {
+              registry: "ok",
+              database: "ok",
+              storage: "ok",
+              ray: "ok",
+            },
+            resources: { gpus_total: 8, gpus_available: 3 },
           });
         }
         return new Response("not found", { status: 404 });
@@ -336,6 +404,15 @@ describe("command surface", () => {
       });
       expect(JSON.parse(await run("models", "esm3"))).toMatchObject({
         id: "esm3",
+        card: {
+          category: "蛋白质设计",
+          use_cases: ["蛋白质设计"],
+          limitations: ["大模型需要较多显存"],
+          links: { repo: "https://github.com/evolutionaryscale/esm" },
+        },
+        inputs: {
+          files: [{ name: "sequence", example: "sequence_example.fasta" }],
+        },
       });
       expect(JSON.parse(await run("list"))).toMatchObject({ total: 1 });
       expect(JSON.parse(await run("show", completedJob.id))).toMatchObject({
@@ -361,7 +438,13 @@ describe("command surface", () => {
         health: { status: "ok" },
         ready: {
           status: "ok",
-          checks: { registry: "ok", database: "ok", storage: "ok" },
+          checks: {
+            registry: "ok",
+            database: "ok",
+            storage: "ok",
+            ray: "ok",
+          },
+          resources: { gpus_total: 8, gpus_available: 3 },
         },
       });
       expect(stderr.join("")).toContain('"progress":"Polling');
@@ -397,8 +480,12 @@ describe("command surface", () => {
 
   test("main maps Worker, infrastructure, and command validation failures to stable exit codes", async () => {
     let response = new Response();
+    let fetchError: Error | undefined;
     const fetchMock = spyOn(globalThis, "fetch").mockImplementation(
-      async () => response,
+      async () => {
+        if (fetchError) throw fetchError;
+        return response;
+      },
     );
     const stderr: string[] = [];
     const stderrWrite = spyOn(process.stderr, "write").mockImplementation(
@@ -441,7 +528,11 @@ describe("command surface", () => {
 
       response = Response.json({ items: [{ invalid: true }] });
       expect(await main(["bun", "tumbleweed", "jobs", "models"])).toBe(2);
+
+      fetchError = new DOMException("The operation timed out", "TimeoutError");
+      expect(await main(["bun", "tumbleweed", "jobs", "models"])).toBe(2);
       expect(stderr.join("")).toContain('"code":"unknown_model"');
+      expect(stderr.join("")).toContain('"code":"timeout"');
     } finally {
       stderrWrite.mockRestore();
       fetchMock.mockRestore();
@@ -525,6 +616,104 @@ describe("command surface", () => {
     } finally {
       stdoutWrite.mockRestore();
       stderrWrite.mockRestore();
+      fetchMock.mockRestore();
+    }
+  });
+
+  test("human mode changes config output presentation without changing data", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "tumbleweed-cli-config-"));
+    const configPath = join(directory, "config.json");
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const write = spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      stdout.push(String(chunk));
+      return true;
+    });
+    const stderrWrite = spyOn(process.stderr, "write").mockImplementation(
+      (chunk) => {
+        stderr.push(String(chunk));
+        return true;
+      },
+    );
+
+    try {
+      await createProgram({ configPath })
+        .exitOverride()
+        .parseAsync([
+          "bun",
+          "tumbleweed",
+          "--human",
+          "jobs",
+          "config",
+          "set",
+          "worker_url",
+          "http://saved.example:9050/",
+        ]);
+      expect(stderr.join("")).toContain("Set worker_url");
+      expect(stdout.join("")).toContain(
+        '"worker_url": "http://saved.example:9050"',
+      );
+
+      stdout.length = 0;
+      stderr.length = 0;
+      await createProgram({ configPath })
+        .exitOverride()
+        .parseAsync(["bun", "tumbleweed", "--human", "jobs", "config", "show"]);
+      expect(stdout.join("")).toContain("Config path");
+      expect(stdout.join("")).toContain("worker_url");
+      expect(stdout.join("")).toContain("http://saved.example:9050");
+
+      stdout.length = 0;
+      await createProgram({ configPath })
+        .exitOverride()
+        .parseAsync(["bun", "tumbleweed", "--human", "jobs", "config", "path"]);
+      expect(stdout.join("").trim()).toBe(configPath);
+    } finally {
+      write.mockRestore();
+      stderrWrite.mockRestore();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("human mode renders health and model detail as readable text", async () => {
+    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(
+      async (input) => {
+        const path = new URL(String(input)).pathname;
+        if (path === "/models")
+          return Response.json({ items: [modelFixture()] });
+        if (path === "/healthz") return Response.json({ status: "ok" });
+        return Response.json({
+          status: "ok",
+          checks: { registry: "ok", database: "ok", storage: "ok" },
+          resources: { gpus_total: 8, gpus_available: 3 },
+        });
+      },
+    );
+    process.env.TUMBLEWEED_WORKER_URL = "http://worker.test:9050";
+    const stdout: string[] = [];
+    const stdoutWrite = spyOn(process.stdout, "write").mockImplementation(
+      (chunk) => {
+        stdout.push(String(chunk));
+        return true;
+      },
+    );
+
+    try {
+      await createProgram()
+        .exitOverride()
+        .parseAsync(["bun", "tumbleweed", "--human", "jobs", "health"]);
+      expect(stdout.join("")).toContain("Worker URL");
+      expect(stdout.join("")).toContain("healthy / ready");
+      expect(stdout.join("")).toContain("3 / 8 available");
+
+      stdout.length = 0;
+      await createProgram()
+        .exitOverride()
+        .parseAsync(["bun", "tumbleweed", "--human", "jobs", "models", "esm3"]);
+      expect(stdout.join("")).toContain("ESM-3");
+      expect(stdout.join("")).toContain("sequence");
+    } finally {
+      stdoutWrite.mockRestore();
       fetchMock.mockRestore();
     }
   });
@@ -695,6 +884,50 @@ describe("command surface", () => {
     } finally {
       stdoutWrite.mockRestore();
       fetchMock.mockRestore();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("executable waits for a delayed artifact download before exiting", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "tumbleweed-large-result-"));
+
+    try {
+      const process = Bun.spawn(
+        [
+          Bun.which("bun") ?? "bun",
+          "--preload",
+          join(import.meta.dir, "fixtures/delayed-fetch.ts"),
+          join(import.meta.dir, "../src/bin.ts"),
+          "jobs",
+          "result",
+          "job_20260714_120000_a1b2c3d4",
+          "--output-dir",
+          directory,
+        ],
+        {
+          env: {
+            ...globalThis.process.env,
+            TUMBLEWEED_WORKER_URL: "http://worker.test:9050",
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const [exitCode, stdout, stderr] = await Promise.all([
+        process.exited,
+        new Response(process.stdout).text(),
+        new Response(process.stderr).text(),
+      ]);
+
+      expect(exitCode).toBe(0);
+      expect(stderr).toBe("");
+      const receipt = JSON.parse(stdout);
+      expect(receipt.path).toBe(join(directory, "artifact.bin"));
+      const downloaded = readFileSync(receipt.path);
+      expect(downloaded.byteLength).toBe(2 * 1024 * 1024);
+      expect(downloaded[0]).toBe(7);
+      expect(downloaded.at(-1)).toBe(7);
+    } finally {
       rmSync(directory, { recursive: true, force: true });
     }
   });

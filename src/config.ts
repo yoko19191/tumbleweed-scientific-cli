@@ -1,7 +1,13 @@
+import { config as dotenvConfig } from "dotenv";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { CliError } from "./errors.js";
+
+export interface LoadEnvOptions {
+  path?: string;
+  override?: boolean;
+}
 
 export interface JobsConfig {
   worker_url: string;
@@ -41,6 +47,13 @@ export function normalizeWorkerUrl(value: string): string {
       2,
     );
   }
+}
+
+export function loadEnv(options: LoadEnvOptions = {}): void {
+  dotenvConfig({
+    path: options.path,
+    override: options.override ?? false,
+  });
 }
 
 export function loadConfig(options: ConfigOptions = {}): JobsConfig {

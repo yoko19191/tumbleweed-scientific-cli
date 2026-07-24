@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import {
+  outputConfigPath,
+  outputConfigShow,
   outputError,
+  outputHealth,
   outputJob,
   outputJobList,
   outputJson,
   outputLogs,
+  outputModelDetail,
   outputModelList,
   outputProgress,
   outputSuccess,
@@ -140,5 +144,109 @@ describe("output protocol", () => {
     expect(stderr.join("")).toContain("submitted");
     expect(stderr.join("")).toContain("Polling demo: RUNNING");
     expect(stderr.join("")).toContain('"code": "demo"');
+  });
+
+  test("renders config, health, and model detail as JSON by default", () => {
+    const stdout: string[] = [];
+    const stdoutWrite = spyOn(process.stdout, "write").mockImplementation(
+      (chunk) => {
+        stdout.push(String(chunk));
+        return true;
+      },
+    );
+
+    try {
+      outputConfigPath("/tmp/config.json");
+      outputConfigShow("/tmp/config.json", {
+        worker_url: { value: "http://worker.test", source: "env" },
+      });
+      outputHealth(
+        "http://worker.test",
+        { status: "ok" },
+        {
+          status: "ok",
+          checks: { registry: "ok" },
+          resources: { gpus_total: 8, gpus_available: 3 },
+        },
+      );
+      outputModelDetail(model);
+    } finally {
+      stdoutWrite.mockRestore();
+    }
+
+    const output = stdout.join("");
+    expect(output).toContain('"path": "/tmp/config.json"');
+    expect(output).toContain('"config_path": "/tmp/config.json"');
+    expect(output).toContain('"worker_url": "http://worker.test"');
+    expect(output).toContain('"status": "ok"');
+    expect(output).toContain('"id": "esm3"');
+  });
+
+  test("renders config, health, and model detail in human mode", () => {
+    setHumanMode(true);
+    const stdout: string[] = [];
+    const stdoutWrite = spyOn(process.stdout, "write").mockImplementation(
+      (chunk) => {
+        stdout.push(String(chunk));
+        return true;
+      },
+    );
+
+    const detailedModel: ModelPublic = {
+      ...model,
+      card: {
+        summary_zh: "生成并理解蛋白质序列与结构。",
+        category: "蛋白质设计",
+        tags: ["序列", "结构"],
+        input_modalities: ["FASTA"],
+        output_modalities: ["PDB"],
+        features: ["结构预测"],
+        use_cases: ["蛋白质设计"],
+        limitations: ["大模型需要较多显存"],
+        links: { repo: "https://github.com/evolutionaryscale/esm" },
+      },
+      params: [
+        {
+          name: "task",
+          type: "enum",
+          default: "fold",
+          choices: ["fold", "embed"],
+          description: "Task",
+          help_zh: "任务类型",
+        },
+      ],
+    };
+
+    try {
+      outputConfigPath("/tmp/config.json");
+      outputConfigShow("/tmp/config.json", {
+        worker_url: { value: "http://worker.test", source: "env" },
+        job_owner: { value: "(not set)", source: "default" },
+      });
+      outputHealth(
+        "http://worker.test",
+        { status: "ok" },
+        {
+          status: "ok",
+          checks: { registry: "ok", database: "ok" },
+          resources: { gpus_total: 8, gpus_available: 3 },
+        },
+      );
+      outputModelDetail(detailedModel);
+    } finally {
+      stdoutWrite.mockRestore();
+    }
+
+    const output = stdout.join("");
+    expect(output).toContain("/tmp/config.json");
+    expect(output).toContain("worker_url");
+    expect(output).toContain("Worker URL");
+    expect(output).toContain("healthy / ready");
+    expect(output).toContain("registry");
+    expect(output).toContain("3 / 8 available");
+    expect(output).toContain("ESM-3");
+    expect(output).toContain("蛋白质设计");
+    expect(output).toContain("task");
+    expect(output).toContain("repo:");
   });
 });

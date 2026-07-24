@@ -1,5 +1,10 @@
 import pc from "picocolors";
-import type { JobOut, LogsOut, ModelPublic } from "./worker/schemas.js";
+import type {
+  JobOut,
+  LogsOut,
+  ModelPublic,
+  ReadyOut,
+} from "./worker/schemas.js";
 
 // ---------------------------------------------------------------------------
 // Global output mode
@@ -148,6 +153,121 @@ export function outputModelList(models: ModelPublic[]): void {
     const gpus = `${m.resources.gpus_min}-${m.resources.gpus_max}`;
     process.stdout.write(
       `${padRow(m.id, m.display_name, gpus, inputNames, paramCount)}\n`,
+    );
+  }
+}
+
+export function outputModelDetail(model: ModelPublic): void {
+  if (!humanMode) {
+    outputJson(model);
+    return;
+  }
+  process.stdout.write(
+    `${pc.bold(model.display_name)} (${pc.cyan(model.id)})\n`,
+  );
+  if (model.help_zh) {
+    process.stdout.write(`${pc.dim(model.help_zh)}\n`);
+  }
+  const card = model.card;
+  if (card?.summary_zh) {
+    process.stdout.write(`\n${card.summary_zh}\n`);
+  }
+  if (card?.category) {
+    process.stdout.write(`\n${pc.bold("Category")}  ${card.category}\n`);
+  }
+  if (card?.tags?.length) {
+    process.stdout.write(`${pc.bold("Tags")}      ${card.tags.join(", ")}\n`);
+  }
+  process.stdout.write(
+    `\n${pc.bold("Resources")}  ${model.resources.gpus} GPU(s) · timeout ${model.resources.timeout_seconds}s\n`,
+  );
+  if (model.inputs.files.length) {
+    process.stdout.write(`\n${pc.bold("Inputs")}\n`);
+    for (const input of model.inputs.files) {
+      const required = input.required ? pc.red("required") : pc.dim("optional");
+      process.stdout.write(
+        `  ${pc.bold(input.name)}  ${input.description || input.help_zh || ""} (${required})\n`,
+      );
+    }
+  }
+  if (model.params.length) {
+    process.stdout.write(`\n${pc.bold("Parameters")}\n`);
+    for (const param of model.params) {
+      const type = param.choices?.length
+        ? `${param.type}(${param.choices.join("|")})`
+        : param.type;
+      const defaultValue =
+        param.default != null ? ` · default ${String(param.default)}` : "";
+      process.stdout.write(
+        `  ${pc.bold(param.name)}  ${type}${defaultValue}\n`,
+      );
+      if (param.description || param.help_zh) {
+        process.stdout.write(
+          `           ${param.description || param.help_zh}\n`,
+        );
+      }
+    }
+  }
+  if (card?.links && Object.keys(card.links).length > 0) {
+    process.stdout.write(`\n${pc.bold("Links")}\n`);
+    for (const [name, url] of Object.entries(card.links)) {
+      process.stdout.write(`  ${name}: ${pc.underline(url)}\n`);
+    }
+  }
+}
+
+export function outputConfigPath(configPath: string): void {
+  if (!humanMode) {
+    outputJson({ path: configPath });
+    return;
+  }
+  process.stdout.write(`${configPath}\n`);
+}
+
+export function outputConfigShow(
+  configPath: string,
+  sources: Record<string, { value: string; source: string }>,
+): void {
+  if (!humanMode) {
+    outputJson({ config_path: configPath, values: sources });
+    return;
+  }
+  process.stdout.write(`${pc.bold("Config path")}  ${configPath}\n\n`);
+  const header = padRow("KEY", "VALUE", "SOURCE");
+  process.stdout.write(`${pc.bold(header)}\n`);
+  process.stdout.write(`${"─".repeat(header.length)}\n`);
+  for (const [key, item] of Object.entries(sources)) {
+    process.stdout.write(`${padRow(key, item.value, item.source)}\n`);
+  }
+}
+
+export function outputHealth(
+  workerUrl: string,
+  health: { status: string },
+  ready: ReadyOut,
+): void {
+  if (!humanMode) {
+    outputJson({ worker_url: workerUrl, health, ready });
+    return;
+  }
+  const healthOk = health.status === "ok";
+  const readyOk = ready.status === "ok";
+  const healthLabel = healthOk ? pc.green("healthy") : pc.red(health.status);
+  const readyLabel = readyOk ? pc.green("ready") : pc.red(ready.status);
+  process.stdout.write(`${pc.bold("Worker URL")}  ${workerUrl}\n`);
+  process.stdout.write(
+    `${pc.bold("Status")}      ${healthLabel} / ${readyLabel}\n`,
+  );
+  if (ready.checks && Object.keys(ready.checks).length > 0) {
+    process.stdout.write(`\n${pc.bold("Checks")}\n`);
+    for (const [name, status] of Object.entries(ready.checks)) {
+      const label = status === "ok" ? pc.green(status) : pc.red(status);
+      process.stdout.write(`  ${name.padEnd(12)} ${label}\n`);
+    }
+  }
+  if (ready.resources) {
+    process.stdout.write(
+      `\n${pc.bold("GPUs")}        ${ready.resources.gpus_available} / ${ready.resources.gpus_total} available\n`,
     );
   }
 }

@@ -6,6 +6,7 @@ import {
   configWithSources,
   DEFAULT_WORKER_URL,
   loadConfig,
+  loadEnv,
   normalizeWorkerUrl,
   saveConfig,
 } from "../src/config.js";
@@ -90,6 +91,63 @@ describe("jobs configuration", () => {
       expect(() =>
         loadConfig({ env: { TUMBLEWEED_WORKER_URL: workerUrl } }),
       ).toThrow("Invalid Worker URL");
+    }
+  });
+
+  test("loads Worker URL from a .env file", () => {
+    const directory = mkdtempSync(join(tmpdir(), "tumbleweed-dotenv-"));
+    const envPath = join(directory, ".env");
+    const original = process.env.TUMBLEWEED_WORKER_URL;
+    try {
+      delete process.env.TUMBLEWEED_WORKER_URL;
+      writeFileSync(
+        envPath,
+        "TUMBLEWEED_WORKER_URL=http://dotenv.example:9050/\n",
+      );
+      loadEnv({ path: envPath });
+      expect(loadConfig().worker_url).toBe("http://dotenv.example:9050");
+    } finally {
+      if (original === undefined) delete process.env.TUMBLEWEED_WORKER_URL;
+      else process.env.TUMBLEWEED_WORKER_URL = original;
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("does not override an existing environment variable from .env by default", () => {
+    const directory = mkdtempSync(join(tmpdir(), "tumbleweed-dotenv-"));
+    const envPath = join(directory, ".env");
+    const original = process.env.TUMBLEWEED_WORKER_URL;
+    try {
+      process.env.TUMBLEWEED_WORKER_URL = "http://existing.example:9050/";
+      writeFileSync(
+        envPath,
+        "TUMBLEWEED_WORKER_URL=http://dotenv.example:9050/\n",
+      );
+      loadEnv({ path: envPath });
+      expect(loadConfig().worker_url).toBe("http://existing.example:9050");
+    } finally {
+      if (original === undefined) delete process.env.TUMBLEWEED_WORKER_URL;
+      else process.env.TUMBLEWEED_WORKER_URL = original;
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("can override an existing environment variable from .env when requested", () => {
+    const directory = mkdtempSync(join(tmpdir(), "tumbleweed-dotenv-"));
+    const envPath = join(directory, ".env");
+    const original = process.env.TUMBLEWEED_WORKER_URL;
+    try {
+      process.env.TUMBLEWEED_WORKER_URL = "http://existing.example:9050/";
+      writeFileSync(
+        envPath,
+        "TUMBLEWEED_WORKER_URL=http://dotenv.example:9050/\n",
+      );
+      loadEnv({ path: envPath, override: true });
+      expect(loadConfig().worker_url).toBe("http://dotenv.example:9050");
+    } finally {
+      if (original === undefined) delete process.env.TUMBLEWEED_WORKER_URL;
+      else process.env.TUMBLEWEED_WORKER_URL = original;
+      rmSync(directory, { recursive: true, force: true });
     }
   });
 });

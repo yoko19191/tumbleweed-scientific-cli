@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
+import { loadEnv } from "./config.js";
 import { main } from "./index.js";
 
-void main().then((exitCode) => {
-  process.exitCode = exitCode;
-});
+loadEnv();
+process.exitCode = await main();

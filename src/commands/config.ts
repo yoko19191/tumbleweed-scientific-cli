@@ -1,7 +1,12 @@
 import type { Command } from "commander";
 import { CONFIG_PATH, configWithSources, saveConfig } from "../config.js";
 import { CliError } from "../errors.js";
-import { outputJson, outputSuccess } from "../output.js";
+import {
+  outputConfigPath,
+  outputConfigShow,
+  outputJson,
+  outputSuccess,
+} from "../output.js";
 
 const ALLOWED_KEYS = ["worker_url", "job_owner"] as const;
 type ConfigKey = (typeof ALLOWED_KEYS)[number];
@@ -20,7 +25,7 @@ export function registerConfigCommand(
     .description("Show current configuration with sources")
     .action(() => {
       const sources = configWithSources(options);
-      outputJson({ config_path: configPath, values: sources });
+      outputConfigShow(configPath, sources);
     });
 
   config
@@ -44,6 +49,6 @@ export function registerConfigCommand(
     .command("path")
     .description("Print config file path")
     .action(() => {
-      outputJson({ path: configPath });
+      outputConfigPath(configPath);
     });
 }

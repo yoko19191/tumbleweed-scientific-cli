@@ -108,6 +108,7 @@ export const InputFileSpecSchema = z.object({
   help_zh: z.string().default(""),
   required: z.boolean().default(true),
   max_size_mb: z.number(),
+  example: z.string().default(""),
 });
 
 export const ParamSpecSchema = z.object({
@@ -122,11 +123,24 @@ export const ParamSpecSchema = z.object({
 });
 export type ParamSpec = z.infer<typeof ParamSpecSchema>;
 
+export const ModelCardSchema = z.object({
+  summary_zh: z.string().default(""),
+  category: z.string().default(""),
+  tags: z.array(z.string()).default([]),
+  input_modalities: z.array(z.string()).default([]),
+  output_modalities: z.array(z.string()).default([]),
+  features: z.array(z.string()).default([]),
+  use_cases: z.array(z.string()).default([]),
+  limitations: z.array(z.string()).default([]),
+  links: z.record(z.string()).default({}),
+});
+
 export const ModelPublicSchema = z.object({
   id: z.string(),
   display_name: z.string(),
   help_zh: z.string().default(""),
   enabled: z.boolean(),
+  card: ModelCardSchema.nullable().optional(),
   resources: z.object({
     gpus: z.number(),
     gpus_min: z.number(),
@@ -165,7 +179,14 @@ export const HealthOutSchema = z.object({
 export const ReadyOutSchema = z.object({
   status: z.string(),
   checks: z.record(z.string()),
+  resources: z
+    .object({
+      gpus_total: z.number(),
+      gpus_available: z.number(),
+    })
+    .optional(),
 });
+export type ReadyOut = z.infer<typeof ReadyOutSchema>;
 
 // ---------------------------------------------------------------------------
 // Error envelope (worker standard format)

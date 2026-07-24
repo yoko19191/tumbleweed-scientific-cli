@@ -1,13 +1,27 @@
 import { randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { Command } from "commander";
+import { loadConfig } from "../config.js";
+import { CliError } from "../errors.js";
+import {
+  outputHealth,
+  outputJob,
+  outputJobList,
+  outputJson,
+  outputLogs,
+  outputModelDetail,
+  outputModelList,
+  outputProgress,
+  outputSuccess,
+} from "../output.js";
 import {
   cancelJob,
   createJob,
   getJob,
   getJobLogs,
   getJobResult,
+  getModelExample,
   healthz,
   listJobs,
   listModels,
@@ -15,17 +29,6 @@ import {
   uploadFile,
   waitForJob,
 } from "../worker/client.js";
-import { loadConfig } from "../config.js";
-import { CliError } from "../errors.js";
-import {
-  outputJob,
-  outputJobList,
-  outputJson,
-  outputLogs,
-  outputModelList,
-  outputProgress,
-  outputSuccess,
-} from "../output.js";
 import type { ModelPublic, ParamSpec } from "../worker/schemas.js";
 import { registerConfigCommand } from "./config.js";
 
@@ -47,11 +50,31 @@ export function registerJobsCommand(
         const model = result.items.find((item) => item.id === modelId);
         if (!model)
           throw new CliError(`Unknown model: ${modelId}`, "unknown_model");
-        outputJson(model);
+        outputModelDetail(model);
         return;
       }
       outputModelList(result.items);
     });
+
+  jobs
+    .command("example")
+    .description("Download a model input example")
+    .argument("<model_id>", "Model ID")
+    .argument("<input_name>", "Model input name")
+    .requiredOption("--output <path>", "Write the example to this path")
+    .action(
+      async (modelId: string, inputName: string, opts: { output: string }) => {
+        const data = await getModelExample(modelId, inputName);
+        mkdirSync(dirname(opts.output), { recursive: true });
+        await Bun.write(opts.output, data);
+        outputJson({
+          model_id: modelId,
+          input_name: inputName,
+          path: opts.output,
+          bytes: data.byteLength,
+        });
+      },
+    );
 
   // ── submit ────────────────────────────────────────────────────────────
   jobs
@@ -173,7 +196,7 @@ export function registerJobsCommand(
         }
         const filename = result.object_key.split("/").pop() ?? "result";
         const outPath = join(opts.outputDir, filename);
-        await Bun.write(outPath, response);
+        await writeResponseToFile(response, outPath);
         outputSuccess(`Downloaded → ${outPath}`);
         outputJson({ path: outPath, object_key: result.object_key });
       } else {
@@ -254,7 +277,7 @@ export function registerJobsCommand(
           },
         );
       }
-      outputJson({ worker_url: workerUrl, health, ready });
+      outputHealth(workerUrl, health, ready);
     });
 
   registerConfigCommand(jobs, options);
@@ -385,6 +408,25 @@ function validateInputs(
         "missing_input",
       );
     }
+  }
+}
+
+async function writeResponseToFile(
+  response: Response,
+  outPath: string,
+): Promise<void> {
+  if (!response.body) {
+    throw new CliError("Download returned an empty body", "download_failed");
+  }
+  const writer = Bun.file(outPath).writer();
+  try {
+    for await (const chunk of response.body) {
+      await writer.write(chunk);
+    }
+    await writer.end();
+  } catch (error) {
+    await writer.end(error instanceof Error ? error : undefined);
+    throw error;
   }
 }
 

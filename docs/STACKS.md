@@ -20,7 +20,7 @@
 | 输出着色 | **picocolors** | ^1 | 零依赖、体积极小（< 1 KB），仅在 `--human` 模式启用 |
 | Schema 校验 | **Zod** | ^3 | 校验 API 响应、CLI 参数，TypeScript 类型推断一流 |
 | HTTP | **Bun 内置 fetch** | — | 零额外依赖 |
-| 配置 | 环境变量 + JSON | — | `TUMBLEWEED_WORKER_URL` 优先，其次是配置文件与默认 Worker 地址 |
+| 配置 | 环境变量 + dotenv + JSON | `dotenv` | `TUMBLEWEED_WORKER_URL` 优先，其次是 `.env` 文件、配置文件与默认 Worker 地址 |
 | 打包 | **bun build --compile** | — | 编译为单个可执行文件，目标机器零依赖 |
 | 多平台 CI | **GitHub Actions matrix** | — | macOS arm64/x64 + Linux x64/arm64 交叉编译 |
 | 测试 | **bun:test** | — | 集成式命令测试，内置覆盖率门禁不低于 95% |
@@ -57,7 +57,7 @@
 
 ## 动态模型发现
 
-模型 ID、参数 schema、输入规格全部从 `GET /models` API 动态获取，CLI 代码中不写死任何模型信息。
+模型 ID、参数 schema、输入规格与模型卡全部从 `GET /models` API 动态获取，CLI 代码中不写死任何模型信息。输入声明包含示例文件时，CLI 通过 `GET /models/{model_id}/examples/{input_name}` 将它下载到用户指定的路径。
 Worker 侧新增/修改模型只需要更新 YAML 配置并重启，CLI 无需任何改动。
 
 `tumbleweed jobs submit` 会根据动态 schema 解析参数类型、检查必填输入，随后完成 presigned PUT 和 `POST /jobs`。CLI 只负责命令协议与本地文件传输；调度、任务状态、模型执行和结果存储仍由 Worker 负责。

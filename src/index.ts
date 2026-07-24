@@ -1,9 +1,9 @@
 import { Command } from "commander";
 import packageJson from "../package.json";
-import { ApiClientError } from "./worker/client.js";
 import { registerJobsCommand } from "./commands/jobs.js";
 import { CliError } from "./errors.js";
 import { outputError, setHumanMode } from "./output.js";
+import { ApiClientError } from "./worker/client.js";
 
 export interface ProgramOptions {
   configPath?: string;

@@ -17,6 +17,7 @@ import {
   PresignedGetOutSchema,
   type PresignUploadOut,
   PresignUploadOutSchema,
+  type ReadyOut,
   ReadyOutSchema,
 } from "./schemas.js";
 
@@ -39,6 +40,8 @@ export class ApiClientError extends Error {
 // HTTP helpers
 // ---------------------------------------------------------------------------
 
+const WORKER_REQUEST_TIMEOUT_MS = 30_000;
+
 function apiUrl(path: string): string {
   const config = loadConfig();
   const base = config.worker_url;
@@ -53,23 +56,49 @@ async function handleResponse<T>(
   const body = await response.json();
 
   if (!response.ok && !acceptedStatuses.includes(response.status)) {
-    const parsed = ApiErrorSchema.safeParse(body);
-    if (parsed.success) {
-      throw new ApiClientError(
-        parsed.data.error.message,
-        response.status,
-        parsed.data.error.code,
-        parsed.data.error.detail as Record<string, unknown>,
-      );
-    }
-    throw new ApiClientError(
-      `HTTP ${response.status}: ${response.statusText}`,
-      response.status,
-      "http_error",
-    );
+    throw apiClientError(response, body);
   }
 
   return parse(body);
+}
+
+function apiClientError(response: Response, body: unknown): ApiClientError {
+  const parsed = ApiErrorSchema.safeParse(body);
+  if (parsed.success) {
+    return new ApiClientError(
+      parsed.data.error.message,
+      response.status,
+      parsed.data.error.code,
+      parsed.data.error.detail as Record<string, unknown>,
+    );
+  }
+  return new ApiClientError(
+    `HTTP ${response.status}: ${response.statusText}`,
+    response.status,
+    "http_error",
+  );
+}
+
+async function workerFetch(
+  path: string,
+  init?: RequestInit,
+): Promise<Response> {
+  try {
+    return await fetch(apiUrl(path), {
+      ...init,
+      signal: AbortSignal.timeout(WORKER_REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "TimeoutError") {
+      throw new ApiClientError(
+        "Worker request timed out after 30 seconds",
+        0,
+        "timeout",
+        { timeout_seconds: WORKER_REQUEST_TIMEOUT_MS / 1000 },
+      );
+    }
+    throw error;
+  }
 }
 
 async function get<T>(
@@ -77,7 +106,7 @@ async function get<T>(
   parse: (d: unknown) => T,
   acceptedStatuses?: readonly number[],
 ): Promise<T> {
-  const response = await fetch(apiUrl(path));
+  const response = await workerFetch(path);
   return handleResponse(response, parse, acceptedStatuses);
 }
 
@@ -86,7 +115,7 @@ async function post<T>(
   body: unknown,
   parse: (d: unknown) => T,
 ): Promise<T> {
-  const response = await fetch(apiUrl(path), {
+  const response = await workerFetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -95,7 +124,7 @@ async function post<T>(
 }
 
 async function del<T>(path: string, parse: (d: unknown) => T): Promise<T> {
-  const response = await fetch(apiUrl(path), { method: "DELETE" });
+  const response = await workerFetch(path, { method: "DELETE" });
   return handleResponse(response, parse);
 }
 
@@ -105,6 +134,19 @@ async function del<T>(path: string, parse: (d: unknown) => T): Promise<T> {
 
 export async function listModels(): Promise<ModelListOut> {
   return get("/models", (d) => ModelListOutSchema.parse(d));
+}
+
+export async function getModelExample(
+  modelId: string,
+  inputName: string,
+): Promise<ArrayBuffer> {
+  const response = await workerFetch(
+    `/models/${encodeURIComponent(modelId)}/examples/${encodeURIComponent(inputName)}`,
+  );
+  if (!response.ok) {
+    throw apiClientError(response, await response.json());
+  }
+  return response.arrayBuffer();
 }
 
 // ---------------------------------------------------------------------------
@@ -232,10 +274,7 @@ export async function healthz(): Promise<{ status: string }> {
   return get("/healthz", (d) => HealthOutSchema.parse(d));
 }
 
-export async function readyz(): Promise<{
-  status: string;
-  checks: Record<string, string>;
-}> {
+export async function readyz(): Promise<ReadyOut> {
   return get("/readyz", (d) => ReadyOutSchema.parse(d), [503]);
 }
 
