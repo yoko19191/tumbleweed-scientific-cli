@@ -2,7 +2,17 @@
 # 手动端到端测试：Worker 走 Tailscale，但 MinIO presign URL 里的内网 IP 手动替换为 Tailscale IP
 set -euo pipefail
 
-CLI="./dist/tumbleweed-darwin-arm64"
+case "$(uname -sm)" in
+  "Darwin arm64") CLI="./dist/tumbleweed-darwin-arm64" ;;
+  "Darwin x86_64") CLI="./dist/tumbleweed-darwin-x64" ;;
+  "Linux aarch64") CLI="./dist/tumbleweed-linux-arm64" ;;
+  "Linux x86_64") CLI="./dist/tumbleweed-linux-x64" ;;
+  *) CLI="./dist/tumbleweed" ;;
+esac
+if [ ! -x "$CLI" ] && command -v bun >/dev/null 2>&1; then
+  CLI="bun run src/bin.ts"
+fi
+
 WORKER="http://100.120.104.69:9050"
 MINIO_PUBLIC_HOST="100.120.104.69:9000"
 MINIO_INTERNAL_HOST="10.39.13.209:9000"

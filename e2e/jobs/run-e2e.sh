@@ -9,7 +9,19 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
-CLI="./dist/tumbleweed-darwin-arm64"
+case "$(uname -sm)" in
+  "Darwin arm64") CLI="./dist/tumbleweed-darwin-arm64" ;;
+  "Darwin x86_64") CLI="./dist/tumbleweed-darwin-x64" ;;
+  "Linux aarch64") CLI="./dist/tumbleweed-linux-arm64" ;;
+  "Linux x86_64") CLI="./dist/tumbleweed-linux-x64" ;;
+  *) CLI="./dist/tumbleweed" ;;
+esac
+
+# 如果未编译对应平台二进制，回退到源码运行（需要 bun）
+if [ ! -x "$CLI" ] && command -v bun >/dev/null 2>&1; then
+  CLI="bun run src/bin.ts"
+fi
+
 RUN_ID="e2e-$(date +%Y%m%d-%H%M%S)"
 RUN_ROOT="e2e/jobs"
 REPORT="$RUN_ROOT/$RUN_ID-report.jsonl"
