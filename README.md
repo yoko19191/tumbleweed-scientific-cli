@@ -24,21 +24,21 @@ bun run dev -- --help
 
 ## Worker 地址
 
-默认 Worker 地址是 `http://10.39.13.209:9050/`。需要切换实例时，可通过环境变量 `TUMBLEWEED_WORKER_URL` 或项目目录下的 `.env` 文件设置：
+默认 Worker 地址是 `http://100.120.104.69:9050/`。需要切换实例时，可通过环境变量 `TUMBLEWEED_WORKER_URL` 或项目目录下的 `.env` 文件设置：
 
 ```bash
-export TUMBLEWEED_WORKER_URL="http://10.39.13.209:9050/"
+export TUMBLEWEED_WORKER_URL="http://100.120.104.69:9050/"
 ```
 
 ```bash
 # .env
-TUMBLEWEED_WORKER_URL=http://10.39.13.209:9050/
+TUMBLEWEED_WORKER_URL=http://100.120.104.69:9050/
 ```
 
 也可以持久化到 `~/.config/tumbleweed/config.json`：
 
 ```bash
-tumbleweed jobs config set worker_url http://10.39.13.209:9050/
+tumbleweed jobs config set worker_url http://100.120.104.69:9050/
 tumbleweed jobs config set job_owner liangzhu-lab
 tumbleweed jobs config show
 ```

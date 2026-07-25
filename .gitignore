@@ -18,3 +18,9 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# E2E generated artifacts (keep scripts)
+e2e/jobs/*/
+e2e/jobs/*.log
+e2e/jobs/*.jsonl
+e2e/jobs/*.json
