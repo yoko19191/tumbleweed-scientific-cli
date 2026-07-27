@@ -1,6 +1,9 @@
 import { randomBytes } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { createWriteStream, mkdirSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import type { Command } from "commander";
 import { loadConfig } from "../config.js";
 import { CliError } from "../errors.js";
@@ -66,7 +69,7 @@ export function registerJobsCommand(
       async (modelId: string, inputName: string, opts: { output: string }) => {
         const data = await getModelExample(modelId, inputName);
         mkdirSync(dirname(opts.output), { recursive: true });
-        await Bun.write(opts.output, data);
+        await writeFile(opts.output, new Uint8Array(data));
         outputJson({
           model_id: modelId,
           input_name: inputName,
@@ -418,16 +421,7 @@ async function writeResponseToFile(
   if (!response.body) {
     throw new CliError("Download returned an empty body", "download_failed");
   }
-  const writer = Bun.file(outPath).writer();
-  try {
-    for await (const chunk of response.body) {
-      await writer.write(chunk);
-    }
-    await writer.end();
-  } catch (error) {
-    await writer.end(error instanceof Error ? error : undefined);
-    throw error;
-  }
+  await pipeline(Readable.from(response.body), createWriteStream(outPath));
 }
 
 export function generateJobId(

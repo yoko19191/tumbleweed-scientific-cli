@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="380" viewBox="0 0 1200 380"
+     role="img" aria-labelledby="title desc">
+  <title id="title">科学风滚草的命令行伙伴</title>
+  <desc id="desc">连接本地数据与远端科学模型，并通过 models、submit、wait、result 四个命令完成一次标准化计算。</desc>
+
+  <rect width="1200" height="380" rx="28" fill="#0B1713"/>
+
+  <g id="project-title" transform="translate(64 54)">
+    <text x="0" y="0"
+          fill="#A8BEAF"
+          font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+          font-size="18"
+          font-weight="600"
+          letter-spacing="2">TUMBLEWEED SCIENTIFIC CLI</text>
+
+    <text x="0" y="104"
+          fill="#CBE478"
+          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="38"
+          font-weight="650">科学风滚草的命令行伙伴</text>
+
+    <text x="0" y="164"
+          fill="#C8D2CC"
+          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="23">连接远端模型，整理数据与计算流程。</text>
+
+    <g id="tumbleweed-mark" transform="translate(0 230)">
+      <circle cx="18" cy="18" r="17" fill="none" stroke="#CBE478" stroke-width="2"/>
+      <path d="M4 20c10-2 19-8 27-16M7 7c6 10 14 17 25 22M3 15c11 2 20 8 28 17"
+            fill="none" stroke="#CBE478" stroke-width="2" stroke-linecap="round"/>
+      <path d="M48 18h104" fill="none" stroke="#52665B" stroke-width="2" stroke-linecap="round"/>
+      <text x="168" y="25"
+            fill="#83988C"
+            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+            font-size="18">REMOTE SCIENTIFIC JOBS</text>
+    </g>
+  </g>
+
+  <path d="M654 48v284" stroke="#2D4036" stroke-width="1"/>
+
+  <g id="command-flow" transform="translate(710 48)">
+    <rect width="426" height="284" rx="20" fill="#12231C" stroke="#30473A" stroke-width="2"/>
+
+    <g id="terminal-title" transform="translate(24 24)">
+      <circle cx="7" cy="7" r="5" fill="#CBE478"/>
+      <circle cx="25" cy="7" r="5" fill="#D5A858"/>
+      <circle cx="43" cy="7" r="5" fill="#557064"/>
+      <text x="67" y="14"
+            fill="#F4F1E8"
+            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+            font-size="20"
+            font-weight="600">$ tumbleweed jobs</text>
+    </g>
+
+    <path d="M47 82v144" fill="none" stroke="#40594C" stroke-width="2"/>
+
+    <g id="models-command" transform="translate(24 72)">
+      <circle cx="23" cy="13" r="7" fill="#CBE478"/>
+      <text x="52" y="20"
+            fill="#F4F1E8"
+            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+            font-size="21"
+            font-weight="650">models</text>
+      <text x="184" y="20"
+            fill="#A8BEAF"
+            font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+            font-size="18">发现远端模型</text>
+    </g>
+
+    <g id="submit-command" transform="translate(24 124)">
+      <circle cx="23" cy="13" r="7" fill="#CBE478"/>
+      <text x="52" y="20"
+            fill="#F4F1E8"
+            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+            font-size="21"
+            font-weight="650">submit</text>
+      <text x="184" y="20"
+            fill="#A8BEAF"
+            font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+            font-size="18">准备数据并提交</text>
+    </g>
+
+    <g id="wait-command" transform="translate(24 176)">
+      <circle cx="23" cy="13" r="7" fill="#CBE478"/>
+      <text x="52" y="20"
+            fill="#F4F1E8"
+            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+            font-size="21"
+            font-weight="650">wait</text>
+      <text x="184" y="20"
+            fill="#A8BEAF"
+            font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+            font-size="18">跟踪计算状态</text>
+    </g>
+
+    <g id="result-command" transform="translate(24 228)">
+      <circle cx="23" cy="13" r="7" fill="#D5A858"/>
+      <text x="52" y="20"
+            fill="#F4F1E8"
+            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+            font-size="21"
+            font-weight="650">result</text>
+      <text x="184" y="20"
+            fill="#D9C392"
+            font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+            font-size="18">取回计算结果</text>
+    </g>
+  </g>
+</svg>

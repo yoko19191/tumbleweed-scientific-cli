@@ -1,9 +1,14 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { execFile } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { createProgram, main } from "../src/index.js";
 
+const execFileAsync = promisify(execFile);
+const testDirectory = dirname(fileURLToPath(import.meta.url));
 const originalWorkerUrl = process.env.TUMBLEWEED_WORKER_URL;
 
 afterEach(() => {
@@ -113,29 +118,31 @@ describe("command surface", () => {
 
   test("downloads a declared model input example to an explicit path", async () => {
     const requests: string[] = [];
-    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(
-      async (input) => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input) => {
         const url = new URL(String(input));
         requests.push(url.pathname);
         return new Response(">demo\nMSTN\n", {
           headers: { "Content-Type": "text/plain" },
         });
-      },
-    );
+      });
     process.env.TUMBLEWEED_WORKER_URL = "http://worker.test:9050/";
     const directory = mkdtempSync(join(tmpdir(), "tumbleweed-example-"));
     const outputPath = join(directory, "examples", "sequence.fasta");
     const stdout: string[] = [];
-    const write = spyOn(process.stdout, "write").mockImplementation((chunk) => {
-      stdout.push(String(chunk));
-      return true;
-    });
+    const write = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
+        stdout.push(String(chunk));
+        return true;
+      });
 
     try {
       await createProgram()
         .exitOverride()
         .parseAsync([
-          "bun",
+          "node",
           "tumbleweed",
           "jobs",
           "example",
@@ -162,8 +169,9 @@ describe("command surface", () => {
 
   test("submit discovers the model, uploads local inputs, and preserves schema types", async () => {
     const requests: Array<{ method: string; path: string; body: unknown }> = [];
-    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(
-      async (input, init) => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input, init) => {
         const url = new URL(String(input));
         const method = init?.method ?? "GET";
         const rawBody = typeof init?.body === "string" ? init.body : null;
@@ -194,23 +202,24 @@ describe("command surface", () => {
           return Response.json(jobFixture(payload.input_keys, payload.params));
         }
         return new Response("not found", { status: 404 });
-      },
-    );
+      });
     process.env.TUMBLEWEED_WORKER_URL = "http://worker.test:9050/";
 
     const directory = mkdtempSync(join(tmpdir(), "tumbleweed-cli-"));
     const inputPath = join(directory, "sequence.fa");
     writeFileSync(inputPath, ">demo\nMSTN\n");
     const stdout: string[] = [];
-    const write = spyOn(process.stdout, "write").mockImplementation((chunk) => {
-      stdout.push(String(chunk));
-      return true;
-    });
+    const write = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
+        stdout.push(String(chunk));
+        return true;
+      });
 
     try {
       const program = createProgram().exitOverride();
       await program.parseAsync([
-        "bun",
+        "node",
         "tumbleweed",
         "jobs",
         "submit",
@@ -255,16 +264,18 @@ describe("command surface", () => {
     const directory = mkdtempSync(join(tmpdir(), "tumbleweed-cli-config-"));
     const configPath = join(directory, "config.json");
     const stdout: string[] = [];
-    const write = spyOn(process.stdout, "write").mockImplementation((chunk) => {
-      stdout.push(String(chunk));
-      return true;
-    });
+    const write = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
+        stdout.push(String(chunk));
+        return true;
+      });
 
     try {
       await createProgram({ configPath })
         .exitOverride()
         .parseAsync([
-          "bun",
+          "node",
           "tumbleweed",
           "jobs",
           "config",
@@ -279,7 +290,7 @@ describe("command surface", () => {
       stdout.length = 0;
       await createProgram({ configPath })
         .exitOverride()
-        .parseAsync(["bun", "tumbleweed", "jobs", "config", "show"]);
+        .parseAsync(["node", "tumbleweed", "jobs", "config", "show"]);
       expect(JSON.parse(stdout.join(""))).toMatchObject({
         config_path: configPath,
         values: {
@@ -293,14 +304,14 @@ describe("command surface", () => {
       stdout.length = 0;
       await createProgram({ configPath })
         .exitOverride()
-        .parseAsync(["bun", "tumbleweed", "jobs", "config", "path"]);
+        .parseAsync(["node", "tumbleweed", "jobs", "config", "path"]);
       expect(JSON.parse(stdout.join(""))).toEqual({ path: configPath });
 
       await expect(
         createProgram({ configPath })
           .exitOverride()
           .parseAsync([
-            "bun",
+            "node",
             "tumbleweed",
             "jobs",
             "config",
@@ -327,8 +338,9 @@ describe("command surface", () => {
       logs_uri: "jobs/demo/logs/execution.log",
       finished_at: "2026-07-14T12:05:00Z",
     };
-    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(
-      async (input, init) => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input, init) => {
         const url = new URL(String(input));
         const method = init?.method ?? "GET";
         requests.push(`${method} ${url.pathname}${url.search}`);
@@ -373,28 +385,27 @@ describe("command surface", () => {
           });
         }
         return new Response("not found", { status: 404 });
-      },
-    );
+      });
     process.env.TUMBLEWEED_WORKER_URL = "http://worker.test:9050/";
     const stdout: string[] = [];
     const stderr: string[] = [];
-    const stdoutWrite = spyOn(process.stdout, "write").mockImplementation(
-      (chunk) => {
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
         stdout.push(String(chunk));
         return true;
-      },
-    );
-    const stderrWrite = spyOn(process.stderr, "write").mockImplementation(
-      (chunk) => {
+      });
+    const stderrWrite = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk) => {
         stderr.push(String(chunk));
         return true;
-      },
-    );
+      });
     const run = async (...args: string[]) => {
       stdout.length = 0;
       await createProgram()
         .exitOverride()
-        .parseAsync(["bun", "tumbleweed", "jobs", ...args]);
+        .parseAsync(["node", "tumbleweed", "jobs", ...args]);
       return stdout.join("");
     };
 
@@ -459,19 +470,19 @@ describe("command surface", () => {
   });
 
   test("main returns a success exit code instead of terminating the process", async () => {
-    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(
-      async (input) => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input) => {
         const path = new URL(String(input)).pathname;
         if (path === "/healthz") return Response.json({ status: "ok" });
         return Response.json({ status: "ok", checks: {} });
-      },
-    );
-    const stdoutWrite = spyOn(process.stdout, "write").mockImplementation(
-      () => true,
-    );
+      });
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
     process.env.TUMBLEWEED_WORKER_URL = "http://worker.test:9050";
     try {
-      expect(await main(["bun", "tumbleweed", "jobs", "health"])).toBe(0);
+      expect(await main(["node", "tumbleweed", "jobs", "health"])).toBe(0);
     } finally {
       stdoutWrite.mockRestore();
       fetchMock.mockRestore();
@@ -481,19 +492,19 @@ describe("command surface", () => {
   test("main maps Worker, infrastructure, and command validation failures to stable exit codes", async () => {
     let response = new Response();
     let fetchError: Error | undefined;
-    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(
-      async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => {
         if (fetchError) throw fetchError;
         return response;
-      },
-    );
+      });
     const stderr: string[] = [];
-    const stderrWrite = spyOn(process.stderr, "write").mockImplementation(
-      (chunk) => {
+    const stderrWrite = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk) => {
         stderr.push(String(chunk));
         return true;
-      },
-    );
+      });
     process.env.TUMBLEWEED_WORKER_URL = "http://worker.test:9050";
 
     try {
@@ -507,7 +518,7 @@ describe("command surface", () => {
         },
         { status: 404 },
       );
-      expect(await main(["bun", "tumbleweed", "jobs", "models"])).toBe(1);
+      expect(await main(["node", "tumbleweed", "jobs", "models"])).toBe(1);
 
       response = Response.json(
         {
@@ -519,18 +530,18 @@ describe("command surface", () => {
         },
         { status: 503 },
       );
-      expect(await main(["bun", "tumbleweed", "jobs", "models"])).toBe(2);
+      expect(await main(["node", "tumbleweed", "jobs", "models"])).toBe(2);
 
       response = Response.json({ items: [] });
       expect(
-        await main(["bun", "tumbleweed", "jobs", "models", "missing"]),
+        await main(["node", "tumbleweed", "jobs", "models", "missing"]),
       ).toBe(1);
 
       response = Response.json({ items: [{ invalid: true }] });
-      expect(await main(["bun", "tumbleweed", "jobs", "models"])).toBe(2);
+      expect(await main(["node", "tumbleweed", "jobs", "models"])).toBe(2);
 
       fetchError = new DOMException("The operation timed out", "TimeoutError");
-      expect(await main(["bun", "tumbleweed", "jobs", "models"])).toBe(2);
+      expect(await main(["node", "tumbleweed", "jobs", "models"])).toBe(2);
       expect(stderr.join("")).toContain('"code":"unknown_model"');
       expect(stderr.join("")).toContain('"code":"timeout"');
     } finally {
@@ -540,8 +551,9 @@ describe("command surface", () => {
   });
 
   test("health preserves readiness details when the Worker is degraded", async () => {
-    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(
-      async (input) => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input) => {
         const path = new URL(String(input)).pathname;
         if (path === "/healthz") return Response.json({ status: "ok" });
         return Response.json(
@@ -551,18 +563,17 @@ describe("command surface", () => {
           },
           { status: 503 },
         );
-      },
-    );
+      });
     const stderr: string[] = [];
-    const stderrWrite = spyOn(process.stderr, "write").mockImplementation(
-      (chunk) => {
+    const stderrWrite = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk) => {
         stderr.push(String(chunk));
         return true;
-      },
-    );
+      });
     process.env.TUMBLEWEED_WORKER_URL = "http://worker.test:9050";
     try {
-      expect(await main(["bun", "tumbleweed", "jobs", "health"])).toBe(1);
+      expect(await main(["node", "tumbleweed", "jobs", "health"])).toBe(1);
       expect(stderr.join("")).toContain('"database":"offline"');
     } finally {
       stderrWrite.mockRestore();
@@ -577,29 +588,29 @@ describe("command surface", () => {
       error: "model crashed",
       finished_at: "2026-07-14T12:05:00Z",
     };
-    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(async () =>
-      Response.json(failedJob),
-    );
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => Response.json(failedJob));
     const stdout: string[] = [];
     const stderr: string[] = [];
-    const stdoutWrite = spyOn(process.stdout, "write").mockImplementation(
-      (chunk) => {
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
         stdout.push(String(chunk));
         return true;
-      },
-    );
-    const stderrWrite = spyOn(process.stderr, "write").mockImplementation(
-      (chunk) => {
+      });
+    const stderrWrite = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk) => {
         stderr.push(String(chunk));
         return true;
-      },
-    );
+      });
     process.env.TUMBLEWEED_WORKER_URL = "http://worker.test:9050";
 
     try {
       expect(
         await main([
-          "bun",
+          "node",
           "tumbleweed",
           "jobs",
           "wait",
@@ -625,22 +636,24 @@ describe("command surface", () => {
     const configPath = join(directory, "config.json");
     const stdout: string[] = [];
     const stderr: string[] = [];
-    const write = spyOn(process.stdout, "write").mockImplementation((chunk) => {
-      stdout.push(String(chunk));
-      return true;
-    });
-    const stderrWrite = spyOn(process.stderr, "write").mockImplementation(
-      (chunk) => {
+    const write = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
+        stdout.push(String(chunk));
+        return true;
+      });
+    const stderrWrite = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk) => {
         stderr.push(String(chunk));
         return true;
-      },
-    );
+      });
 
     try {
       await createProgram({ configPath })
         .exitOverride()
         .parseAsync([
-          "bun",
+          "node",
           "tumbleweed",
           "--human",
           "jobs",
@@ -658,7 +671,14 @@ describe("command surface", () => {
       stderr.length = 0;
       await createProgram({ configPath })
         .exitOverride()
-        .parseAsync(["bun", "tumbleweed", "--human", "jobs", "config", "show"]);
+        .parseAsync([
+          "node",
+          "tumbleweed",
+          "--human",
+          "jobs",
+          "config",
+          "show",
+        ]);
       expect(stdout.join("")).toContain("Config path");
       expect(stdout.join("")).toContain("worker_url");
       expect(stdout.join("")).toContain("http://saved.example:9050");
@@ -666,7 +686,14 @@ describe("command surface", () => {
       stdout.length = 0;
       await createProgram({ configPath })
         .exitOverride()
-        .parseAsync(["bun", "tumbleweed", "--human", "jobs", "config", "path"]);
+        .parseAsync([
+          "node",
+          "tumbleweed",
+          "--human",
+          "jobs",
+          "config",
+          "path",
+        ]);
       expect(stdout.join("").trim()).toBe(configPath);
     } finally {
       write.mockRestore();
@@ -676,8 +703,9 @@ describe("command surface", () => {
   });
 
   test("human mode renders health and model detail as readable text", async () => {
-    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(
-      async (input) => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input) => {
         const path = new URL(String(input)).pathname;
         if (path === "/models")
           return Response.json({ items: [modelFixture()] });
@@ -687,21 +715,20 @@ describe("command surface", () => {
           checks: { registry: "ok", database: "ok", storage: "ok" },
           resources: { gpus_total: 8, gpus_available: 3 },
         });
-      },
-    );
+      });
     process.env.TUMBLEWEED_WORKER_URL = "http://worker.test:9050";
     const stdout: string[] = [];
-    const stdoutWrite = spyOn(process.stdout, "write").mockImplementation(
-      (chunk) => {
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
         stdout.push(String(chunk));
         return true;
-      },
-    );
+      });
 
     try {
       await createProgram()
         .exitOverride()
-        .parseAsync(["bun", "tumbleweed", "--human", "jobs", "health"]);
+        .parseAsync(["node", "tumbleweed", "--human", "jobs", "health"]);
       expect(stdout.join("")).toContain("Worker URL");
       expect(stdout.join("")).toContain("healthy / ready");
       expect(stdout.join("")).toContain("3 / 8 available");
@@ -709,7 +736,14 @@ describe("command surface", () => {
       stdout.length = 0;
       await createProgram()
         .exitOverride()
-        .parseAsync(["bun", "tumbleweed", "--human", "jobs", "models", "esm3"]);
+        .parseAsync([
+          "node",
+          "tumbleweed",
+          "--human",
+          "jobs",
+          "models",
+          "esm3",
+        ]);
       expect(stdout.join("")).toContain("ESM-3");
       expect(stdout.join("")).toContain("sequence");
     } finally {
@@ -750,11 +784,13 @@ describe("command surface", () => {
         },
       ],
     };
-    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(async () =>
-      Response.json({ items: [validationModel] }),
-    );
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () =>
+        Response.json({ items: [validationModel] }),
+      );
     process.env.TUMBLEWEED_WORKER_URL = "http://worker.test:9050";
-    const base = ["bun", "tumbleweed", "jobs", "submit", "--model", "esm3"];
+    const base = ["node", "tumbleweed", "jobs", "submit", "--model", "esm3"];
     const cases: Array<{ args: string[]; message: string }> = [
       { args: [], message: "Missing required input" },
       { args: ["--input", "invalid"], message: "Invalid key=value pair" },
@@ -840,8 +876,9 @@ describe("command surface", () => {
   test("result downloads an artifact and reports transfer failures", async () => {
     const directory = mkdtempSync(join(tmpdir(), "tumbleweed-result-"));
     let downloadStatus = 200;
-    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(
-      async (input) => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input) => {
         const url = new URL(String(input));
         if (url.pathname.endsWith("/result")) {
           return Response.json({
@@ -851,18 +888,17 @@ describe("command surface", () => {
           });
         }
         return new Response("archive", { status: downloadStatus });
-      },
-    );
+      });
     process.env.TUMBLEWEED_WORKER_URL = "http://worker.test:9050";
     const stdout: string[] = [];
-    const stdoutWrite = spyOn(process.stdout, "write").mockImplementation(
-      (chunk) => {
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
         stdout.push(String(chunk));
         return true;
-      },
-    );
+      });
     const args = [
-      "bun",
+      "node",
       "tumbleweed",
       "jobs",
       "result",
@@ -892,12 +928,14 @@ describe("command surface", () => {
     const directory = mkdtempSync(join(tmpdir(), "tumbleweed-large-result-"));
 
     try {
-      const process = Bun.spawn(
+      const { stdout, stderr } = await execFileAsync(
+        process.execPath,
         [
-          Bun.which("bun") ?? "bun",
-          "--preload",
-          join(import.meta.dir, "fixtures/delayed-fetch.ts"),
-          join(import.meta.dir, "../src/bin.ts"),
+          "--import",
+          "tsx",
+          "--import",
+          join(testDirectory, "fixtures/delayed-fetch.mjs"),
+          join(testDirectory, "../src/bin.ts"),
           "jobs",
           "result",
           "job_20260714_120000_a1b2c3d4",
@@ -906,20 +944,13 @@ describe("command surface", () => {
         ],
         {
           env: {
-            ...globalThis.process.env,
+            ...process.env,
             TUMBLEWEED_WORKER_URL: "http://worker.test:9050",
           },
-          stdout: "pipe",
-          stderr: "pipe",
+          maxBuffer: 4 * 1024 * 1024,
         },
       );
-      const [exitCode, stdout, stderr] = await Promise.all([
-        process.exited,
-        new Response(process.stdout).text(),
-        new Response(process.stderr).text(),
-      ]);
 
-      expect(exitCode).toBe(0);
       expect(stderr).toBe("");
       const receipt = JSON.parse(stdout);
       expect(receipt.path).toBe(join(directory, "artifact.bin"));

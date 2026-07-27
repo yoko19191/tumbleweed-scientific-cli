@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import packageJson from "../package.json";
+import packageJson from "../package.json" with { type: "json" };
 import { registerJobsCommand } from "./commands/jobs.js";
 import { CliError } from "./errors.js";
 import { outputError, setHumanMode } from "./output.js";

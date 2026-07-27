@@ -31,7 +31,7 @@
 
 ## 2026-07-23 验收发现并修复
 
-编译后的 CLI 在下载 `genos` 与 `xtrimopglm` 的二进制 embedding 时会持续占满 CPU 且不落盘。小型文本、结构与 NumPy 文件未触发，因此原有单测无法发现。结果下载现改为按 `ReadableStream` 分块写入 `Bun.file().writer()`，并由顶层 `await` 托住整个 CLI 生命周期；两个 embedding 结果随后均由编译二进制成功拉回。
+编译后的 CLI 在下载 `genos` 与 `xtrimopglm` 的二进制 embedding 时曾持续占满 CPU 且不落盘。小型文本、结构与 NumPy 文件未触发，因此原有单测无法发现。结果下载现通过 Node.js Stream pipeline 分块写入本地文件，并由顶层 `await` 托住整个 CLI 生命周期；两个 embedding 结果随后均由编译二进制成功拉回。
 
 ## 剩余完成门槛
 

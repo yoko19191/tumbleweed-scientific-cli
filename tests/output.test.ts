@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, vi, test } from "vitest";
 import {
   outputConfigPath,
   outputConfigShow,
@@ -52,6 +52,7 @@ const model: ModelPublic = {
         help_zh: "输入序列",
         required: true,
         max_size_mb: 10,
+        example: "sequence_example.fasta",
       },
     ],
   },
@@ -66,18 +67,18 @@ describe("output protocol", () => {
   test("keeps machine output JSON-only and progress on stderr", () => {
     const stdout: string[] = [];
     const stderr: string[] = [];
-    const stdoutWrite = spyOn(process.stdout, "write").mockImplementation(
-      (chunk) => {
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
         stdout.push(String(chunk));
         return true;
-      },
-    );
-    const stderrWrite = spyOn(process.stderr, "write").mockImplementation(
-      (chunk) => {
+      });
+    const stderrWrite = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk) => {
         stderr.push(String(chunk));
         return true;
-      },
-    );
+      });
 
     try {
       outputJson({ ok: true });
@@ -103,18 +104,18 @@ describe("output protocol", () => {
     setHumanMode(true);
     const stdout: string[] = [];
     const stderr: string[] = [];
-    const stdoutWrite = spyOn(process.stdout, "write").mockImplementation(
-      (chunk) => {
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
         stdout.push(String(chunk));
         return true;
-      },
-    );
-    const stderrWrite = spyOn(process.stderr, "write").mockImplementation(
-      (chunk) => {
+      });
+    const stderrWrite = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk) => {
         stderr.push(String(chunk));
         return true;
-      },
-    );
+      });
 
     try {
       outputSuccess("submitted");
@@ -148,12 +149,12 @@ describe("output protocol", () => {
 
   test("renders config, health, and model detail as JSON by default", () => {
     const stdout: string[] = [];
-    const stdoutWrite = spyOn(process.stdout, "write").mockImplementation(
-      (chunk) => {
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
         stdout.push(String(chunk));
         return true;
-      },
-    );
+      });
 
     try {
       outputConfigPath("/tmp/config.json");
@@ -185,12 +186,12 @@ describe("output protocol", () => {
   test("renders config, health, and model detail in human mode", () => {
     setHumanMode(true);
     const stdout: string[] = [];
-    const stdoutWrite = spyOn(process.stdout, "write").mockImplementation(
-      (chunk) => {
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
         stdout.push(String(chunk));
         return true;
-      },
-    );
+      });
 
     const detailedModel: ModelPublic = {
       ...model,

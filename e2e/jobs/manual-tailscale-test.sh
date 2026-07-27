@@ -9,8 +9,8 @@ case "$(uname -sm)" in
   "Linux x86_64") CLI="./dist/tumbleweed-linux-x64" ;;
   *) CLI="./dist/tumbleweed" ;;
 esac
-if [ ! -x "$CLI" ] && command -v bun >/dev/null 2>&1; then
-  CLI="bun run src/bin.ts"
+if [ ! -x "$CLI" ]; then
+  CLI="npm run dev --"
 fi
 
 WORKER="http://100.120.104.69:9050"

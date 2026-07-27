@@ -7,6 +7,6 @@ globalThis.fetch = async (input) => {
       expires_seconds: 900,
     });
   }
-  await Bun.sleep(100);
+  await new Promise((resolve) => setTimeout(resolve, 100));
   return new Response(new Uint8Array(2 * 1024 * 1024).fill(7));
 };

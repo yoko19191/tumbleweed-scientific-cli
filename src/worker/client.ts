@@ -1,3 +1,5 @@
+import { openAsBlob, type Stats } from "node:fs";
+import { stat } from "node:fs/promises";
 import { basename } from "node:path";
 import { loadConfig } from "../config.js";
 import { CliError } from "../errors.js";
@@ -185,13 +187,27 @@ export async function uploadFile(opts: {
   filePath: string;
   jobId?: string;
 }): Promise<{ objectKey: string }> {
-  const file = Bun.file(opts.filePath);
-  if (!(await file.exists())) {
+  const contentType = "application/octet-stream";
+  let fileStats: Stats;
+  try {
+    fileStats = await stat(opts.filePath);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") {
+      throw new CliError(
+        `Input file not found: ${opts.filePath}`,
+        "input_file_not_found",
+      );
+    }
+    throw error;
+  }
+  if (!fileStats.isFile()) {
     throw new CliError(
       `Input file not found: ${opts.filePath}`,
       "input_file_not_found",
     );
   }
+  const file = await openAsBlob(opts.filePath, { type: contentType });
   const filename = basename(opts.filePath);
 
   // 1. Get presigned URL
@@ -199,14 +215,14 @@ export async function uploadFile(opts: {
     modelId: opts.modelId,
     inputName: opts.inputName,
     filename,
-    contentType: file.type || "application/octet-stream",
+    contentType,
     jobId: opts.jobId,
     sizeBytes: file.size,
   });
 
   const putResponse = await fetch(presign.url, {
     method: "PUT",
-    headers: { "Content-Type": file.type || "application/octet-stream" },
+    headers: { "Content-Type": contentType },
     body: file,
   });
 

@@ -4,19 +4,20 @@
   "description": "Agent-friendly CLI for discovering models and managing remote scientific jobs",
   "type": "module",
   "bin": {
-    "tumbleweed": "src/bin.ts"
+    "tumbleweed": "dist/tumbleweed.cjs"
   },
   "scripts": {
-    "dev": "bun run src/bin.ts",
-    "build": "bun build --compile src/bin.ts --outfile dist/tumbleweed",
-    "build:all": "bash scripts/build-all.sh",
-    "test": "bun test",
-    "test:coverage": "bun test --coverage",
+    "dev": "node --import tsx src/bin.ts",
+    "build": "esbuild src/bin.ts --bundle --packages=external --platform=node --format=cjs --target=node22 --sourcemap --outfile=dist/tumbleweed.cjs",
+    "build:all": "npm run build && node scripts/build-all.mjs",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "lint": "biome lint .",
     "typecheck": "tsc --noEmit",
     "format": "biome format --write .",
     "format:check": "biome format .",
-    "check": "bun run test:coverage && bun run lint && bun run typecheck && bun run format:check && bun run build"
+    "check": "npm run test:coverage && npm run lint && npm run typecheck && npm run format:check && npm run build",
+    "prepack": "npm run check"
   },
   "dependencies": {
     "commander": "^13.1.0",
@@ -26,12 +27,23 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.3",
-    "@types/bun": "^1.2.18"
+    "@types/node": "^22.20.1",
+    "@vitest/coverage-v8": "^4.1.10",
+    "@yao-pkg/pkg": "^6.21.0",
+    "esbuild": "^0.28.1",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   },
-  "packageManager": "bun@1.3.14",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "packageManager": "npm@11.7.0",
   "files": [
-    "src",
-    "README.md"
+    "dist/tumbleweed.cjs",
+    "dist/tumbleweed.cjs.map",
+    "README.md",
+    "assets/readme"
   ],
   "keywords": [
     "cli",
@@ -40,5 +52,16 @@
     "alphafold",
     "esm3"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yoko19191/tumbleweed-scientific-cli.git"
+  },
+  "homepage": "https://github.com/yoko19191/tumbleweed-scientific-cli#readme",
+  "bugs": {
+    "url": "https://github.com/yoko19191/tumbleweed-scientific-cli/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

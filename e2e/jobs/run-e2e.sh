@@ -17,9 +17,9 @@ case "$(uname -sm)" in
   *) CLI="./dist/tumbleweed" ;;
 esac
 
-# 如果未编译对应平台二进制，回退到源码运行（需要 bun）
-if [ ! -x "$CLI" ] && command -v bun >/dev/null 2>&1; then
-  CLI="bun run src/bin.ts"
+# 如果未编译对应平台二进制，回退到 npm 开发入口。
+if [ ! -x "$CLI" ]; then
+  CLI="npm run dev --"
 fi
 
 RUN_ID="e2e-$(date +%Y%m%d-%H%M%S)"

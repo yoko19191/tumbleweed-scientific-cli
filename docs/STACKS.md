@@ -15,15 +15,16 @@
 
 | 层级 | 选型 | 版本策略 | 理由 |
 |------|------|----------|------|
-| Runtime | **Bun** | latest stable | TypeScript 原生支持，内置 fetch/fs/path，`bun build --compile` 生成单二进制 |
+| Runtime | **Node.js** | >= 22.18 | npm 用户无需额外运行时，内置 fetch、Web Streams 与稳定的 `fs.openAsBlob` |
 | 命令框架 | **Commander.js** | ^13 | API 稳定，子命令结构对 Agent 友好，生态最成熟 |
 | 输出着色 | **picocolors** | ^1 | 零依赖、体积极小（< 1 KB），仅在 `--human` 模式启用 |
 | Schema 校验 | **Zod** | ^3 | 校验 API 响应、CLI 参数，TypeScript 类型推断一流 |
-| HTTP | **Bun 内置 fetch** | — | 零额外依赖 |
+| HTTP | **Node.js 内置 fetch** | — | 零额外依赖 |
 | 配置 | 环境变量 + dotenv + JSON | `dotenv` | `TUMBLEWEED_WORKER_URL` 优先，其次是 `.env` 文件、配置文件与默认 Worker 地址 |
-| 打包 | **bun build --compile** | — | 编译为单个可执行文件，目标机器零依赖 |
+| npm 构建 | **esbuild** | ^0.28 | 将 TypeScript 打包为 Node.js 可执行的 CommonJS 入口 |
+| 二进制打包 | **@yao-pkg/pkg** | ^6 | 从同一份 npm 构建产物生成四平台独立可执行文件 |
 | 多平台 CI | **GitHub Actions matrix** | — | macOS arm64/x64 + Linux x64/arm64 交叉编译 |
-| 测试 | **bun:test** | — | 集成式命令测试，内置覆盖率门禁不低于 95% |
+| 测试 | **Vitest + V8 Coverage** | ^4 | 保留黑盒命令测试，覆盖率门禁不低于 95% |
 | Lint / Format | **Biome** | ^2 | 一套工具完成 TypeScript lint、import 整理与格式化 |
 
 ## 未选方案及理由
@@ -33,7 +34,7 @@
 | @clack/prompts / Inquirer.js | 主用户是 Agent，不需要交互式 prompt |
 | ora / boxen / cli-table3 | Agent 不消费 spinner 和装饰框 |
 | Oclif | 太重，当前命令规模不需要插件系统 |
-| axios / got | Bun 内置 fetch 完全覆盖需求 |
+| axios / got | Node.js 内置 fetch 完全覆盖需求 |
 | Yargs | Commander.js 在子命令结构和 TypeScript 支持上更优 |
 | Citty | 生态较新，Agent 场景下 Commander.js 更稳妥 |
 | cosmiconfig | 配置面非常简单（仅 API URL），不需要多格式配置发现 |
@@ -48,12 +49,16 @@
 
 ## 分发策略
 
-- **npm 包**：`npm install -g tumbleweed-scientific-cli`（需要 Bun 或 Node.js 环境）
-- **预编译二进制**：GitHub Release 附带多平台二进制，Agent 环境直接下载使用
+- **主要渠道：npm 包**。`npm install -g tumbleweed-scientific-cli` 安装，`npm update -g tumbleweed-scientific-cli` 更新，只需要 Node.js 22.18 或更高版本。
+- **补充渠道：预编译二进制**。GitHub Release 附带多平台独立文件，Agent 或服务器环境可以在不安装 Node.js 的情况下直接使用。
   - `tumbleweed-darwin-arm64`
   - `tumbleweed-darwin-x64`
   - `tumbleweed-linux-x64`
   - `tumbleweed-linux-arm64`
+
+版本标签必须与 `package.json` 中的版本一致。发布流水线在四平台二进制构建通过后，先通过 npm Trusted Publishing 发布 npm 包，再创建附带二进制与 SHA-256 校验文件的 GitHub Release。
+
+第一次发布需要维护者在本地登录 npm，手动完成一次 `npm publish`，随后在 npm 包设置中把本仓库的 `.github/workflows/release.yml` 配置为 Trusted Publisher。完成这次引导后，后续版本只需更新 `package.json` 版本并推送对应标签，不再保存长期 npm Token。
 
 ## 动态模型发现
 
