@@ -21,7 +21,7 @@
 如果希望由 Agent 完成环境检查、CLI 与 Skills 安装以及 Worker
 连接验证，可以把下面这句话直接发送给它：
 
-> 请阅读 [Tumbleweed CLI 安装说明](https://raw.githubusercontent.com/yoko19191/tumbleweed-scientific-cli/main/INSTALL.md)，并按照说明为我安装 Tumbleweed CLI 及其配套 Skills。
+> 请阅读：https://raw.githubusercontent.com/yoko19191/tumbleweed-scientific-cli/main/INSTALL.md 并按照说明为我安装 Tumbleweed CLI 及其配套 Skills。
 
 也可以手动安装。使用 Node.js 22.18 或更高版本，通过 npm 安装：
 
