@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://scientific-tumbleweed.dev/schemas/agent-first-cli/envelope-1.json",
+  "$comment": "Internal development template; not distributed with public Tumbleweed Skills.",
   "title": "Agent-first CLI envelope",
   "type": "object",
   "required": ["schema_version", "ok", "meta"],

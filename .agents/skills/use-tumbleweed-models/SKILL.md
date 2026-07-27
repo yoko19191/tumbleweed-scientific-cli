@@ -1,6 +1,8 @@
 ---
 name: use-tumbleweed-models
 description: Use when an Agent must choose among Tumbleweed Scientific Worker models, compare their inputs, outputs, GPU cost, limitations, or compose several models into a scientific workflow.
+metadata:
+  author: yoko19191
 ---
 
 # Use Tumbleweed Models

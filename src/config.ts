@@ -19,7 +19,7 @@ export interface ConfigOptions {
   configPath?: string;
 }
 
-export const DEFAULT_WORKER_URL = "http://100.120.104.69:9050";
+export const DEFAULT_WORKER_URL = "http://10.39.13.209:9050";
 export const CONFIG_PATH = join(
   homedir(),
   ".config",

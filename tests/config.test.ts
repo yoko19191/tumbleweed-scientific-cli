@@ -13,7 +13,7 @@ import {
 
 describe("jobs configuration", () => {
   test("uses the new worker URL contract and ignores the removed API URL variable", () => {
-    expect(loadConfig({ env: {} }).worker_url).toBe(DEFAULT_WORKER_URL);
+    expect(loadConfig({ env: {} }).worker_url).toBe("http://10.39.13.209:9050");
     expect(
       loadConfig({
         env: {

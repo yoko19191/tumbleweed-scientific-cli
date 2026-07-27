@@ -1,6 +1,6 @@
 # Agent-First CLI Contract Matrix
 
-Fill this in before implementing a new command or changing an existing one.
+Fill this internal development matrix before implementing a new command or changing an existing one.
 
 ## Command
 

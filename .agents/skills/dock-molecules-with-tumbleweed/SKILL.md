@@ -1,6 +1,8 @@
 ---
 name: dock-molecules-with-tumbleweed
 description: Use when choosing or chaining AutoDock Vina, DiffDock, DynamicBind, FlowDock, GNINA, or smina on Tumbleweed for protein-ligand docking, pose generation, minimization, confidence, or rescoring.
+metadata:
+  author: yoko19191
 ---
 
 # Dock Molecules With Tumbleweed

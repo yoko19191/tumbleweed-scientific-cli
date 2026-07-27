@@ -1,6 +1,6 @@
 # Verification Guide
 
-Use this as a black-box test plan. Adapt commands and the project test framework, but preserve the assertions.
+Use this internal guide as a black-box test plan. Adapt commands and the project test framework, but preserve the assertions.
 
 ## Invocation
 

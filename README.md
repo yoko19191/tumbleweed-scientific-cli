@@ -74,6 +74,19 @@ tumbleweed jobs result JOB_ID --output-dir ./results
 
 仓库内的 [Agent Skills](.agents/skills) 不只告诉 Agent 怎样运行命令，也帮助它根据研究场景选择模型、准备正确的输入，并把结构预测、蛋白设计、分子对接和序列表示等任务串成完整流程。
 
+通过 [`skills`](https://skills.sh) 可以把全部配套 Skills 安装到本机的 Agent：
+
+```bash
+npx --yes skills add yoko19191/tumbleweed-scientific-cli \
+  --skill '*' \
+  -g -y
+```
+
+通配符只会选择 `.agents/skills` 中的六个公开 Skills；项目开发使用的
+Skill 单独保存在 `.agents/internal-skills`，不会进入安装结果。
+
+CLI 与 Skills 的完整安装、配置和验证步骤见 [Agent 安装说明](INSTALL.md)。
+
 想快速选择模型，可以从 [模型选择指南](docs/models/WHICH_MODELS_HELPS.md) 开始；需要具体任务范例时，查看 [模型任务配方](.agents/skills/use-tumbleweed-models/references/job-recipes.md)。
 
 ## 开发

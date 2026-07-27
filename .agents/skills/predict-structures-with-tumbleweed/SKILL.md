@@ -1,6 +1,8 @@
 ---
 name: predict-structures-with-tumbleweed
 description: Use when choosing and running AlphaFold 3, Boltz-2, or ESM-3 folding on Tumbleweed for protein, nucleic-acid, ligand, or multimolecular structure prediction and interpreting confidence or affinity outputs.
+metadata:
+  author: yoko19191
 ---
 
 # Predict Structures With Tumbleweed

@@ -1,6 +1,8 @@
 ---
 name: run-tumbleweed-jobs
 description: Use when an Agent must discover a Tumbleweed Worker model schema, download example inputs, submit an idempotent remote job, poll it, inspect logs, and retrieve the result through the tumbleweed CLI.
+metadata:
+  author: yoko19191
 ---
 
 # Run Tumbleweed Jobs
@@ -97,4 +99,4 @@ Treat each downstream model as a new job. Inspect the downloaded artifact, selec
 - [ ] Result was downloaded to a known path and is non-empty.
 - [ ] Job receipt and model limitations accompany the result.
 
-For a full deployed-model acceptance run, follow [the repository E2E runbook](../../../docs/E2E_RUNBOOK.md). Its low-iteration parameters verify transport and execution only; do not use those outputs for scientific model comparison. Never submit the shared-GPU suite without explicit authorization.
+For a full deployed-model acceptance run, follow [the repository E2E runbook](https://github.com/yoko19191/tumbleweed-scientific-cli/blob/main/docs/E2E_RUNBOOK.md). Its low-iteration parameters verify transport and execution only; do not use those outputs for scientific model comparison. Never submit the shared-GPU suite without explicit authorization.

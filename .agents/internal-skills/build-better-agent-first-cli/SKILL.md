@@ -2,9 +2,11 @@
 name: build-better-agent-first-cli
 description: Use when designing, implementing, reviewing, or refactoring a CLI whose primary caller is an AI agent or automation. Enforces a deterministic machine contract for commands, input, output, errors, jobs, retries, side effects, discovery, and bounded context use.
 version: 1.0.0
-author: Scientific Tumbleweed
 license: MIT
 metadata:
+  author: yoko19191
+  internal: true
+  scope: repository-development
   tags: [agents, cli, automation, machine-contract, json, idempotency, jobs]
   related_skills: [build-better-agent-tools, build-better-skills]
 ---

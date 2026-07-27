@@ -1,6 +1,8 @@
 ---
 name: embed-sequences-with-tumbleweed
 description: Use when selecting ProteinBERT, ProtBERT, ProtT5, ESM-3, xTrimoPGLM, or Genos on Tumbleweed for protein or genomic embeddings and sequence generation, including cost-aware model choice and downstream use.
+metadata:
+  author: yoko19191
 ---
 
 # Embed Sequences With Tumbleweed

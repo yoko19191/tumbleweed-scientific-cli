@@ -1,6 +1,6 @@
 # Agent-First CLI Contract
 
-This reference is the normative companion to `SKILL.md`. Use `MUST` for release-blocking requirements, `SHOULD` for defaults that need an explicit exception, and `MAY` for optional extensions.
+This internal development reference is the normative companion to `SKILL.md`. Use `MUST` for release-blocking requirements, `SHOULD` for defaults that need an explicit exception, and `MAY` for optional extensions.
 
 ## Invocation and Modes
 

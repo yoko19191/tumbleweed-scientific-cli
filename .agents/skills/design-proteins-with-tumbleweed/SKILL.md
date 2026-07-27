@@ -1,6 +1,8 @@
 ---
 name: design-proteins-with-tumbleweed
 description: Use when designing protein or peptide candidates with Tumbleweed models such as RFdiffusion, RFdiffusion All-Atom, ProteinMPNN, ESM-3, PepMLM, or PepTune, including multi-model handoffs and validation.
+metadata:
+  author: yoko19191
 ---
 
 # Design Proteins With Tumbleweed
