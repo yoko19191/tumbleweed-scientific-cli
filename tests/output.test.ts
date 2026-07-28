@@ -57,7 +57,7 @@ const model: ModelPublic = {
     ],
   },
   params: [],
-  outputs: { collect: [] },
+  outputs: { collect: [], primary: [] },
   limits: null,
 };
 
@@ -195,6 +195,12 @@ describe("output protocol", () => {
 
     const detailedModel: ModelPublic = {
       ...model,
+      resources: {
+        gpus: 1,
+        gpus_min: 1,
+        gpus_max: 2,
+        timeout_seconds: 21600,
+      },
       card: {
         summary_zh: "生成并理解蛋白质序列与结构。",
         category: "蛋白质设计",
@@ -206,16 +212,38 @@ describe("output protocol", () => {
         limitations: ["大模型需要较多显存"],
         links: { repo: "https://github.com/evolutionaryscale/esm" },
       },
+      inputs: {
+        files: [
+          ...model.inputs.files,
+          {
+            name: "fallback_input",
+            description: "Fallback input description",
+            help_zh: "",
+            required: false,
+            max_size_mb: 5,
+            example: "",
+          },
+        ],
+      },
       params: [
         {
-          name: "task",
-          type: "enum",
-          default: "fold",
-          choices: ["fold", "embed"],
-          description: "Task",
-          help_zh: "任务类型",
+          name: "sampling_steps",
+          type: "int",
+          default: 200,
+          min: 2,
+          max: 1000,
+          description: "Structure diffusion steps",
+          help_zh: "结构扩散采样步数",
         },
       ],
+      outputs: {
+        collect: ["/io/output/**"],
+        primary: ["/io/output/*_model.cif"],
+      },
+      limits: {
+        max_total_residues: 2500,
+        notes: "Large complexes may need two GPUs.",
+      },
     };
 
     try {
@@ -247,7 +275,24 @@ describe("output protocol", () => {
     expect(output).toContain("3 / 8 available");
     expect(output).toContain("ESM-3");
     expect(output).toContain("蛋白质设计");
-    expect(output).toContain("task");
+    expect(output).toContain("default 1 GPU");
+    expect(output).toContain("range 1-2");
+    expect(output).toContain("timeout 21600s");
+    expect(output).toContain("required · max 10 MB");
+    expect(output).toContain("example sequence_example.fasta");
+    expect(output).toContain("输入序列");
+    expect(output).not.toContain("FASTA input");
+    expect(output).toContain("Fallback input description");
+    expect(output).toContain("sampling_steps");
+    expect(output).toContain("default 200 · min 2 · max 1000");
+    expect(output).toContain("结构扩散采样步数");
+    expect(output).not.toContain("Structure diffusion steps");
+    expect(output).toContain("Outputs");
+    expect(output).toContain("/io/output/*_model.cif");
+    expect(output).toContain("/io/output/**");
+    expect(output).toContain("Limits");
+    expect(output).toContain("Max total residues  2500");
+    expect(output).toContain("Large complexes may need two GPUs.");
     expect(output).toContain("repo:");
   });
 });

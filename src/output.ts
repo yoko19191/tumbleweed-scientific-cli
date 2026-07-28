@@ -179,15 +179,19 @@ export function outputModelDetail(model: ModelPublic): void {
     process.stdout.write(`${pc.bold("Tags")}      ${card.tags.join(", ")}\n`);
   }
   process.stdout.write(
-    `\n${pc.bold("Resources")}  ${model.resources.gpus} GPU(s) · timeout ${model.resources.timeout_seconds}s\n`,
+    `\n${pc.bold("Resources")}  default ${model.resources.gpus} GPU(s) · range ${model.resources.gpus_min}-${model.resources.gpus_max} · timeout ${model.resources.timeout_seconds}s\n`,
   );
   if (model.inputs.files.length) {
     process.stdout.write(`\n${pc.bold("Inputs")}\n`);
     for (const input of model.inputs.files) {
       const required = input.required ? pc.red("required") : pc.dim("optional");
+      const details = [required, `max ${input.max_size_mb} MB`];
+      if (input.example) details.push(`example ${input.example}`);
       process.stdout.write(
-        `  ${pc.bold(input.name)}  ${input.description || input.help_zh || ""} (${required})\n`,
+        `  ${pc.bold(input.name)}  ${details.join(" · ")}\n`,
       );
+      const help = input.help_zh || input.description;
+      if (help) process.stdout.write(`           ${help}\n`);
     }
   }
   if (model.params.length) {
@@ -198,14 +202,45 @@ export function outputModelDetail(model: ModelPublic): void {
         : param.type;
       const defaultValue =
         param.default != null ? ` · default ${String(param.default)}` : "";
+      const minValue = param.min != null ? ` · min ${param.min}` : "";
+      const maxValue = param.max != null ? ` · max ${param.max}` : "";
       process.stdout.write(
-        `  ${pc.bold(param.name)}  ${type}${defaultValue}\n`,
+        `  ${pc.bold(param.name)}  ${type}${defaultValue}${minValue}${maxValue}\n`,
       );
       if (param.description || param.help_zh) {
         process.stdout.write(
-          `           ${param.description || param.help_zh}\n`,
+          `           ${param.help_zh || param.description}\n`,
         );
       }
+    }
+  }
+  if (model.outputs.primary.length || model.outputs.collect.length) {
+    process.stdout.write(`\n${pc.bold("Outputs")}\n`);
+    if (model.outputs.primary.length) {
+      process.stdout.write(`  ${pc.bold("Primary")}\n`);
+      for (const pattern of model.outputs.primary) {
+        process.stdout.write(`    ${pattern}\n`);
+      }
+    }
+    if (model.outputs.collect.length) {
+      process.stdout.write(`  ${pc.bold("Collect")}\n`);
+      for (const pattern of model.outputs.collect) {
+        process.stdout.write(`    ${pattern}\n`);
+      }
+    }
+  }
+  if (
+    model.limits &&
+    (model.limits.max_total_residues != null || model.limits.notes)
+  ) {
+    process.stdout.write(`\n${pc.bold("Limits")}\n`);
+    if (model.limits.max_total_residues != null) {
+      process.stdout.write(
+        `  ${pc.bold("Max total residues")}  ${model.limits.max_total_residues}\n`,
+      );
+    }
+    if (model.limits.notes) {
+      process.stdout.write(`  ${pc.bold("Notes")}  ${model.limits.notes}\n`);
     }
   }
   if (card?.links && Object.keys(card.links).length > 0) {

@@ -116,6 +116,51 @@ describe("command surface", () => {
     ]);
   });
 
+  test("preserves public primary outputs and filters Worker execution details", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      Response.json({
+        items: [
+          {
+            ...modelFixture(),
+            outputs: {
+              collect: ["/io/output/**"],
+              primary: ["/io/output/*_model.cif"],
+            },
+            container: { sif_path: "/host/models/model.sif" },
+            binds: [{ host: "/host/weights", container: "/weights" }],
+            command: { args: ["python", "/app/run.py"] },
+          },
+        ],
+      }),
+    );
+    process.env.TUMBLEWEED_WORKER_URL = "http://worker.test:9050";
+    const stdout: string[] = [];
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
+        stdout.push(String(chunk));
+        return true;
+      });
+
+    try {
+      await createProgram()
+        .exitOverride()
+        .parseAsync(["node", "tumbleweed", "jobs", "models", "esm3"]);
+    } finally {
+      stdoutWrite.mockRestore();
+      fetchMock.mockRestore();
+    }
+
+    const parsed = JSON.parse(stdout.join(""));
+    expect(parsed.outputs).toEqual({
+      collect: ["/io/output/**"],
+      primary: ["/io/output/*_model.cif"],
+    });
+    expect(parsed).not.toHaveProperty("container");
+    expect(parsed).not.toHaveProperty("binds");
+    expect(parsed).not.toHaveProperty("command");
+  });
+
   test("downloads a declared model input example to an explicit path", async () => {
     const requests: string[] = [];
     const fetchMock = vi
@@ -182,7 +227,17 @@ describe("command surface", () => {
         });
 
         if (url.pathname === "/models") {
-          return Response.json({ items: [modelFixture()] });
+          return Response.json({
+            items: [
+              {
+                ...modelFixture(),
+                outputs: {
+                  collect: ["/io/output/**"],
+                  primary: ["/io/output/structure.pdb"],
+                },
+              },
+            ],
+          });
         }
         if (url.pathname === "/uploads/presign") {
           return Response.json({
@@ -423,6 +478,9 @@ describe("command surface", () => {
         },
         inputs: {
           files: [{ name: "sequence", example: "sequence_example.fasta" }],
+        },
+        outputs: {
+          primary: [],
         },
       });
       expect(JSON.parse(await run("list"))).toMatchObject({ total: 1 });
@@ -707,8 +765,41 @@ describe("command surface", () => {
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (input) => {
         const path = new URL(String(input)).pathname;
-        if (path === "/models")
-          return Response.json({ items: [modelFixture()] });
+        if (path === "/models") {
+          return Response.json({
+            items: [
+              {
+                ...modelFixture(),
+                resources: {
+                  gpus: 1,
+                  gpus_min: 1,
+                  gpus_max: 2,
+                  timeout_seconds: 21600,
+                },
+                params: [
+                  {
+                    name: "sampling_steps",
+                    type: "int",
+                    default: 200,
+                    min: 2,
+                    max: 1000,
+                    choices: null,
+                    description: "Structure diffusion steps",
+                    help_zh: "结构扩散采样步数",
+                  },
+                ],
+                outputs: {
+                  collect: ["/io/output/**"],
+                  primary: ["/io/output/*_model.cif"],
+                },
+                limits: {
+                  max_total_residues: 2500,
+                  notes: "Large complexes may need two GPUs.",
+                },
+              },
+            ],
+          });
+        }
         if (path === "/healthz") return Response.json({ status: "ok" });
         return Response.json({
           status: "ok",
@@ -746,6 +837,11 @@ describe("command surface", () => {
         ]);
       expect(stdout.join("")).toContain("ESM-3");
       expect(stdout.join("")).toContain("sequence");
+      expect(stdout.join("")).toContain("range 1-2");
+      expect(stdout.join("")).toContain("example sequence_example.fasta");
+      expect(stdout.join("")).toContain("min 2");
+      expect(stdout.join("")).toContain("/io/output/*_model.cif");
+      expect(stdout.join("")).toContain("Max total residues");
     } finally {
       stdoutWrite.mockRestore();
       fetchMock.mockRestore();

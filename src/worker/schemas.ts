@@ -153,6 +153,7 @@ export const ModelPublicSchema = z.object({
   params: z.array(ParamSpecSchema).default([]),
   outputs: z.object({
     collect: z.array(z.string()),
+    primary: z.array(z.string()).default([]),
   }),
   limits: z
     .object({
