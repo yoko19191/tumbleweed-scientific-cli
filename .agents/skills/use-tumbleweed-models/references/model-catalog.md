@@ -1,6 +1,6 @@
 # Tumbleweed Model Catalog
 
-This catalog records routing semantics observed from the Worker on 2026-07-24. Always run `tumbleweed jobs models <model_id>` before submission for the current schema, defaults, limits, examples, links, GPU count, and timeout. Use [the official source index](source-index.md) for upstream evidence and [the callable recipes](job-recipes.md) for launch templates.
+This catalog records routing semantics observed from the Worker and verified end to end on 2026-07-27. Always run `tumbleweed jobs models <model_id>` before submission for the current schema, defaults, limits, examples, links, GPU count, timeout, and primary output. Use [the official source index](source-index.md) for upstream evidence and [the callable recipes](job-recipes.md) for launch templates.
 
 ## Structure Prediction
 
@@ -37,7 +37,7 @@ This catalog records routing semantics observed from the Worker on 2026-07-24. A
 ### `dynamicbind` — DynamicBind
 
 - **Choose when:** induced fit, flexible pockets, or a likely apo-to-holo conformational change matters.
-- **Inputs:** required `protein` PDB and `ligand_csv`, normally a CSV containing a `ligand` column.
+- **Inputs:** required `protein` PDB and `ligand_csv`; the current example and recommended path use a paired ligand SDF. The Wrapper also accepts a CSV containing a `ligand` column or a single-SMILES text file.
 - **Output:** ligand-specific complex candidates and adjusted protein conformations.
 - **Limits:** predicted motion is not a molecular-dynamics trajectory; large rearrangements and out-of-distribution ligands require validation.
 

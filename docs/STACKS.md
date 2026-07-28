@@ -63,6 +63,6 @@
 ## 动态模型发现
 
 模型 ID、参数 schema、输入规格与模型卡全部从 `GET /models` API 动态获取，CLI 代码中不写死任何模型信息。输入声明包含示例文件时，CLI 通过 `GET /models/{model_id}/examples/{input_name}` 将它下载到用户指定的路径。
-Worker 侧新增/修改模型只需要更新 YAML 配置并重启，CLI 无需任何改动。
+Worker 侧在现有公共 schema 内新增模型、修改示例或调整参数约束时，只需更新配置并重启，CLI 会在运行时获取变化。若 Worker 新增公共契约字段，CLI 仍需同步 Zod schema 与契约测试，否则未知字段会被过滤；容器、挂载和启动命令等内部执行字段不属于 CLI 公共协议。
 
 `tumbleweed jobs submit` 会根据动态 schema 解析参数类型、检查必填输入，随后完成 presigned PUT 和 `POST /jobs`。CLI 只负责命令协议与本地文件传输；调度、任务状态、模型执行和结果存储仍由 Worker 负责。

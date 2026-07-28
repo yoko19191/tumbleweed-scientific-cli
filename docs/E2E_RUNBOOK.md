@@ -1,6 +1,6 @@
 # Worker 全模型端到端验收手册
 
-> 基线日期：2026-07-24  
+> 基线日期：2026-07-27
 > Worker：`http://10.39.13.209:9050`
 
 这份手册用于重复验证“发现模型 → 获得有效输入 → 上传并提交 → 等待终态 → 拉回结果”的完整 CLI 链路。表中的参数刻意压低采样数量和迭代次数，只证明工程链路可运行，不代表可用于科研结论的推荐配置。
@@ -11,7 +11,7 @@
 
 ```bash
 export TUMBLEWEED_WORKER_URL=http://10.39.13.209:9050
-export RUN_ROOT=/tmp/tumbleweed-e2e-20260724
+export RUN_ROOT=/tmp/tumbleweed-e2e-20260727
 
 ./dist/tumbleweed jobs health
 ./dist/tumbleweed jobs models
@@ -32,9 +32,9 @@ export RUN_ROOT=/tmp/tumbleweed-e2e-20260724
 |---|---|---|---:|---:|
 | `af3` | `af_input=af_input_example.json` | `num_diffusion_samples=1 num_recycles=1` | 1 | 21600s |
 | `autodock_vina` | `receptor=receptor_example.pdbqt ligand=ligand_example.pdbqt box_config=box_config_example.txt` | `exhaustiveness=1 num_modes=1 seed=42` | 1 | 7200s |
-| `boltz2` | `input_yaml=input_example.yaml` | `recycling_steps=1 sampling_steps=1 diffusion_samples=1 max_parallel_samples=1 num_workers=0 preprocessing_threads=1 sampling_steps_affinity=1 diffusion_samples_affinity=1` | 1 | 21600s |
-| `diffdock` | `protein=protein_example.pdb ligand=ligand_example.sdf` | `samples_per_complex=1 inference_steps=1 actual_steps=1 save_visualisation=false` | 1 | 7200s |
-| `dynamicbind` | `protein=protein_example.pdb ligand_csv=ligands_example.csv` | `samples_per_complex=1 savings_per_complex=1 inference_steps=1 batch_size=1 seed=42` | 1 | 10800s |
+| `boltz2` | `input_yaml=input_example.yaml` | `recycling_steps=1 sampling_steps=2 diffusion_samples=1 max_parallel_samples=1 num_workers=0 preprocessing_threads=1 sampling_steps_affinity=2 diffusion_samples_affinity=1` | 1 | 21600s |
+| `diffdock` | `protein=protein_example.pdb ligand=ligand_example.sdf` | `samples_per_complex=1 inference_steps=20 actual_steps=19 save_visualisation=false` | 1 | 7200s |
+| `dynamicbind` | `protein=protein_example.pdb ligand_csv=ligand_example.sdf` | `samples_per_complex=1 savings_per_complex=1 inference_steps=1 batch_size=1 seed=42` | 1 | 10800s |
 | `esm3` | `sequence=sequence_example.fasta` | `task=embed` | 1 | 3600s |
 | `flowdock` | `receptor=receptor_example.pdb ligand=ligand_example.sdf` | `n_samples=1 chunk_size=1 num_steps=1 use_template=true seed=42` | 1 | 10800s |
 | `genos` | `sequence=sequence_example.fasta` | `task=embed` | 2 | 7200s |
@@ -49,6 +49,8 @@ export RUN_ROOT=/tmp/tumbleweed-e2e-20260724
 | `rfdiffusion_aa` | 见下一节 | `ligand=OQO contigs=150-150 num_designs=1 diffusion_steps=40 deterministic=true` | 1 | 21600s |
 | `smina` | `receptor=receptor_example.pdb ligand=ligand_example.sdf autobox_ligand=autobox_ligand_example.sdf` | `mode=dock scoring=vina exhaustiveness=1 num_modes=1 seed=42` | 1 | 7200s |
 | `xtrimopglm` | `sequence=sequence_example.fasta` | `task=embed` | 4 | 10800s |
+
+2026-07-27 回归确认：Boltz-2 的 `sampling_steps` / `sampling_steps_affinity` 下限为 `2 / 2`，DiffDock 的 `inference_steps` / `actual_steps` 下限为 `20 / 19`。CLI 会依据实时 schema 在上传和创建任务前拒绝更低的值。DynamicBind 的输入键仍叫 `ligand_csv`，当前 Worker 示例则是 `ligand_example.sdf`；Wrapper 也支持包含 `ligand` 列的 CSV 或单条 SMILES 文本。
 
 低迭代配置可能降低结构或采样质量。验收结果只能标记为“CLI 与 Worker 工程链路通过”，不能据此比较模型精度。
 
@@ -88,8 +90,8 @@ mkdir -p "$MODEL_DIR/input" "$MODEL_DIR/result"
   --model "$MODEL" \
   --input "af_input=$MODEL_DIR/input/af_input_example.json" \
   --param num_diffusion_samples=1 num_recycles=1 \
-  --job-alias "e2e-20260724-$MODEL" \
-  --idempotency-key "e2e-20260724-$MODEL"
+  --job-alias "e2e-20260727-$MODEL" \
+  --idempotency-key "e2e-20260727-$MODEL"
 ```
 
 从提交输出读取 `id`，然后完成终态与结果验证：

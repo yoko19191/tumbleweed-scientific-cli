@@ -1,6 +1,6 @@
 # Callable Model Recipes
 
-These recipes cover the 19 models exposed by the Worker on 2026-07-24. They are starter invocations, not frozen schemas or scientifically optimal parameters.
+These recipes cover the 19 models exposed by the Worker and verified end to end on 2026-07-27. They are starter invocations, not frozen schemas or scientifically optimal parameters.
 
 ## Contents
 
@@ -166,11 +166,11 @@ Use when ligand-induced receptor motion or a flexible pocket is central.
 tumbleweed jobs submit \
   --model dynamicbind \
   --input protein=inputs/dynamicbind/protein_example.pdb \
-          ligand_csv=inputs/dynamicbind/ligands_example.csv \
+          ligand_csv=inputs/dynamicbind/ligand_example.sdf \
   --param protein_dynamic=true samples_per_complex=10 savings_per_complex=1 seed=42
 ```
 
-- **Required inputs:** protein PDB and a ligand CSV, normally with a `ligand` column.
+- **Required inputs:** protein PDB plus `ligand_csv`; despite the input key name, the current Worker recommends a paired ligand SDF. A CSV containing a `ligand` column or a single-SMILES text file is also accepted, and the Wrapper injects the current `protein_path`.
 - **Expected result:** ligand-specific complexes and adjusted protein conformations.
 - **Handoff:** validate predicted motion with physical checks, MD, another structure model, or experiment.
 - **Do not claim:** generated conformational change is an MD trajectory or a sampled thermodynamic ensemble.
